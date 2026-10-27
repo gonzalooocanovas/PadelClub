@@ -73,6 +73,7 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
   if (game.phase === 'serve') {
     if (game.serverSlot === slot) serve(inp, game, p, os, skill, mem, dt);
     mem.plan = null; mem.react = 0; mem.lastTeam = -1;
+    mem.role = Math.abs(p.z) < 5 ? 'net' : 'back'; // the server and the receiver start at the back, their partners at the net
     return inp;
   }
   if (game.phase !== 'rally') return inp;
@@ -119,7 +120,7 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
     if (plan && responsible) {
       if (mem.react <= 0) moveTo(inp, p, plan.x, plan.z - os * (plan.y > 1.8 ? 0.3 : 0.75), skill, true);
     } else {
-      formation(inp, game, p, os, skill);
+      formation(inp, game, p, os, skill, mem);
     }
     // swing when the ball is close enough and on the way
     const dx = b.x - p.x, dz = b.z - p.z;
@@ -131,7 +132,7 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
       inp.swing = true;
     }
   } else {
-    formation(inp, game, p, os, skill);
+    formation(inp, game, p, os, skill, mem);
   }
   return inp;
 }
@@ -141,7 +142,7 @@ function outsideBall(inp, game, p, os, skill, mem) {
   const b = game.ball;
   const partner = game.players[p.slot ^ 1];
   const mine = Math.hypot(b.x - p.x, b.z - p.z), theirs = partner.active ? Math.hypot(b.x - partner.x, b.z - partner.z) : Infinity;
-  if (theirs < mine - 0.3 || (Math.abs(theirs - mine) <= 0.3 && partner.slot < p.slot)) { formation(inp, game, p, os, skill); return; }
+  if (theirs < mine - 0.3 || (Math.abs(theirs - mine) <= 0.3 && partner.slot < p.slot)) { formation(inp, game, p, os, skill, mem); return; }
   const s = Math.sign(b.x) || 1;
   const doorZ = -os * (COURT.DOOR.z0 + COURT.DOOR.z1) / 2;
   if (Math.abs(p.x) <= COURT.HALF_W - 0.05) { // still inside: walk to the door first
@@ -182,14 +183,21 @@ function serve(inp, game, p, os, skill, mem, dt) {
   mem.serveT = 0;
 }
 
-function formation(inp, game, p, os, skill) {
+function formation(inp, game, p, os, skill, mem) {
   const b = game.ball;
-  if (game.singles) { moveTo(inp, p, clamp(b.x * 0.45, -2.4, 2.4), -os * ((skill.backZ ?? 6.4) - 0.1), skill, false); return; }
+  if (game.singles) { moveTo(inp, p, clamp(b.x * 0.45, -2.4, 2.4), -os * ((skill.backZ ?? 7.6) - 0.1), skill, false); return; }
   // whoever is already nearer the net holds it (the server's partner starts there), the other covers the back
   const partner = game.players[p.slot ^ 1];
   const dp = Math.abs(p.z), dq = Math.abs(partner.z);
-  const net = dp < dq || (dp === dq && p.slot % 2 === 0);
-  const tz = -os * (net ? (skill.netZ ?? 2.9) : (skill.backZ ?? 6.4));
+  // roles are fixed when the point starts (who is at the net, who holds the baseline) and only swap when the pair has
+  // really changed ends (a lob chase): players no longer drift up to the net just because they hit the last ball
+  let net = dp < dq || (dp === dq && p.slot % 2 === 0);
+  if (mem?.role) {
+    net = mem.role === 'net';
+    if (net && dp - dq > 2.8) net = false;
+    else if (!net && dq - dp > 2.8) net = true;
+  }
+  const tz = -os * (net ? (skill.netZ ?? 3.4) : (skill.backZ ?? 7.6));
   const off = net ? (p.team === 0 ? -1.3 : 1.3) : (p.team === 0 ? 1.3 : -1.3);
   const tx = clamp(b.x * 0.45 + off, -3.6, 3.6);
   moveTo(inp, p, tx, tz, skill, false);
