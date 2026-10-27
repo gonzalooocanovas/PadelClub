@@ -145,11 +145,11 @@ function outdoor(ctx) {
   // pergola with benches on the sunny side
   const wood = std(0x7b5a3a, 0.8);
   for (const sx of [-1, 1]) {
-    for (const z of [-4.2, 4.2]) for (const dx of [0, 2.2]) group.add(box(wood, 0.18, 3, 0.18, sx * (7.2 + dx), 1.5, z, true));
-    for (let z = -4.6; z <= 4.6; z += 0.6) group.add(box(wood, 2.8, 0.08, 0.14, sx * 8.3, 3.05, z, true));
-    group.add(box(wood, 0.6, 0.45, 8, sx * 7.6, 0.25, 0)); group.add(box(wood, 0.12, 0.8, 8, sx * 7.9, 0.7, 0));
+    for (const z of [-4.2, 4.2]) for (const dx of [0, 2.2]) group.add(box(wood, 0.18, 3, 0.18, sx * (8.4 + dx), 1.5, z, true));
+    for (let z = -4.6; z <= 4.6; z += 0.6) group.add(box(wood, 2.8, 0.08, 0.14, sx * 9.5, 3.05, z, true));
+    group.add(box(wood, 0.6, 0.45, 8, sx * 8.7, 0.25, 0)); group.add(box(wood, 0.12, 0.8, 8, sx * 9.0, 0.7, 0));
   }
-  ctx.makeCrowd(group, { rows: 1, sides: true, back: false, density: 0.35, xBase: 7.4, rowStep: 0.6, stepH: 0.45, pal: [0xf2e6d0, 0x4a7ab0, 0xd9803a, 0x7fa86a, 0xc65a5a], stepMat: wood });
+  ctx.makeCrowd(group, { rows: 1, sides: true, back: false, density: 0.35, xBase: 8.5, rowStep: 0.6, stepH: 0.45, pal: [0xf2e6d0, 0x4a7ab0, 0xd9803a, 0x7fa86a, 0xc65a5a], stepMat: wood });
   // distant hills and the sea
   const hill = std(0x6f8a5a, 1), sand = std(0xc9b48a, 1), sea = new THREE.MeshStandardMaterial({ color: 0x2f7fb8, roughness: 0.25, metalness: 0.2 });
   for (const [x, z, s, m] of [[-70, -30, 38, hill], [-40, -80, 46, hill], [60, -60, 40, sand], [80, 20, 36, hill], [30, 90, 44, hill]]) { const h = new THREE.Mesh(new THREE.SphereGeometry(s, 16, 8), m); h.scale.y = 0.45; h.position.set(x, -s * 0.2, z); group.add(h); }

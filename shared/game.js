@@ -44,6 +44,9 @@ export class PadelGame {
     if (this.mods) { this.players[0].speedMul = this.mods.runMul; this.players[0].regenMul = this.mods.regenMul; }
     this.ball = makeBall();
     this.ball.hw = this.singles ? 3.5 : COURT.HALF_W;
+    this.openings = !this.singles && this.settings.openings !== false; // access doors in the side walls (doubles)
+    this.ball.doors = this.openings;
+    for (const pl of this.players) pl.pit = this.openings;
     const surf = (COURTS[this.settings.court] || COURTS.indoor).surface; // each court has its own turf
     this.ball.fe = surf.floorE;
     this.ball.ff = surf.floorFric;
@@ -108,7 +111,7 @@ export class PadelGame {
     // the ball is bounced by hand until the serve is hit (hit below the waist after a bounce)
     const ph = (this.time % 0.8) / 0.8;
     b.x = p.x + os * 0.22; b.y = 0.1 + 0.86 * Math.abs(Math.cos(Math.PI * ph)); b.z = p.z + os * 0.4;
-    b.vx = b.vy = b.vz = 0; b.sb = 0; b.ss = 0;
+    b.vx = b.vy = b.vz = 0; b.sb = 0; b.ss = 0; b.ex = false;
   }
 
   // ---------------------------------------------------------------- input
@@ -222,7 +225,10 @@ export class PadelGame {
     const d = Math.hypot(dx, dz);
     if (d <= 1.1 || d > 2.7 || b.y > 3.2) return;
     const step = Math.min(d - 1.1, 5.5 * dt);
-    p.x = clamp(p.x + (dx / d) * step, -p.xLim, p.xLim);
+    const nx = p.x + (dx / d) * step;
+    p.x = p.pit && Math.abs(p.x) > COURT.HALF_W // out in the strip beside the court
+      ? Math.sign(nx) * clamp(Math.abs(nx), COURT.HALF_W + 0.4, COURT.HALF_W + COURT.PIT.w - 0.4)
+      : clamp(nx, -p.xLim, p.xLim);
     const nz = p.z + (dz / d) * step;
     p.z = p.team === 0 ? clamp(nz, -COURT.HALF_L + PLAYER.BACK_GAP, -PLAYER.NET_GAP) : clamp(nz, PLAYER.NET_GAP, COURT.HALF_L - PLAYER.BACK_GAP);
   }
@@ -277,6 +283,7 @@ export class PadelGame {
    *   lateral sideways running speed (m/s): costs accuracy;  forward: speed toward the net (m/s): adds a little pace
    */
   planShot(kind, b, os, aimX, aimZ, q, inSpeed = 0, spinOv = null, ctx = null) {
+    if (ctx?.outside) return this.planOutside(b, os, q);
     const lim = this.singles ? 3.2 : 4.5;
     let tx = clamp(aimX, -lim, lim);
     let depth = clamp(Math.abs(aimZ), 1, 9.4);
@@ -344,6 +351,36 @@ export class PadelGame {
     return { ...v, sb, ss };
   }
 
+  /**
+   * A ball played from the strip outside the court: it cannot go through the glass, so it travels along the strip, round the
+   * net post and in through the opponents' door. Look for a flight that really does that (simulated with the real physics).
+   */
+  planOutside(b, os, q) {
+    const s = Math.sign(b.x) || 1;
+    const D = COURT.DOOR;
+    const doorZ = os * (D.z0 + D.z1) / 2;
+    const spin = { sb: 3, ss: 0 };
+    const err = (1 - q) * 0.5;
+    let best = null;
+    for (const jit of [0, 0.3, -0.3]) {
+      for (const T of [1.0, 1.15, 0.9, 1.3, 0.8, 1.5]) {
+        for (const L of [3.5, 4.5, 2.8]) {
+          const dx = COURT.HALF_W * s - b.x, dz = doorZ + jit - b.z;
+          const dl = Math.hypot(dx, dz) || 1;
+          const tx = COURT.HALF_W * s + (dx / dl) * L + (this.rng() - 0.5) * 2 * err;
+          const tz = doorZ + jit + (dz / dl) * L + (this.rng() - 0.5) * 2 * err;
+          if (Math.abs(tx) > 4.6 || os * tz < 1.2 || os * tz > 9.2) continue;
+          const v = solveLaunch(b, tx, tz, T);
+          const sim = simulateShot(b, v, spin);
+          if (sim.kind === 'floor' && os * sim.z > 0.3 && Math.abs(sim.x) < 4.9) return { ...v, sb: spin.sb, ss: 0 };
+          best = best || v;
+        }
+      }
+    }
+    const v = best || solveLaunch(b, 0, os * 6, 1.2);
+    return { ...v, sb: spin.sb, ss: 0 };
+  }
+
   doServe(p) {
     const os = p.team === 0 ? 1 : -1;
     const sw = p.swing;
@@ -379,7 +416,8 @@ export class PadelGame {
     if (d > PLAYER.REACH) return false;
 
     const sw = p.swing;
-    const kind = this.classify(p, sw);
+    const outside = Math.abs(b.x) > COURT.HALF_W || Math.abs(p.x) > COURT.HALF_W; // playing the ball from outside the court
+    const kind = outside ? 'forehand' : this.classify(p, sw);
     const os = p.team === 0 ? 1 : -1;
 
     // contact quality: sweet spot ~0.85 m from the body, comfortable height, not rushed, ball in front
@@ -414,10 +452,11 @@ export class PadelGame {
 
     const inSpeed = Math.hypot(b.vx, b.vy, b.vz);
     const aim = this.aimFor(p);
+    if (outside) ctx.outside = true;
     const v = this.planShot(kind, b, os, aim.ax, aim.az, q, inSpeed, null, ctx);
     b.vx = v.vx; b.vy = v.vy; b.vz = v.vz; b.sb = v.sb; b.ss = v.ss;
 
-    r.lastTeam = p.team; r.lastSlot = p.slot; r.bounces = 0; r.hits++; r.netTouched = false; r.serving = false;
+    r.lastTeam = p.team; r.lastSlot = p.slot; r.bounces = 0; r.hits++; r.netTouched = false; r.serving = false; r.exited = false;
     const st = this.stats.players[p.slot];
     st.hits++;
     if (kind === 'smash') st.smashes++;
@@ -448,12 +487,21 @@ export class PadelGame {
       if (r.serving) this.fault('net');
       return;
     }
+    if (e.type === 'cord') { this.events.push({ e: 'ball', k: 'net', x: e.x, y: e.y, z: 0, s: e.speed * 0.5 }); return; }
     if (e.type === 'wall') {
       this.events.push({ e: 'ball', k: 'wall', axis: e.axis, x: e.x, y: e.y, z: e.z, s: e.speed });
       if (r.bounces === 0) {
         if (r.serving) this.fault('out');
         else this.endPoint(1 - r.lastTeam, 'out');
       }
+      return;
+    }
+    if (e.type === 'door') {
+      this.events.push({ e: 'ball', k: 'door', x: e.x, y: e.y, z: e.z, s: 0 });
+      if (r.bounces === 0) { // left through the door without bouncing first: out
+        if (r.serving) this.fault('out');
+        else this.endPoint(1 - r.lastTeam, 'out');
+      } else { r.exited = true; r.exitBounce = false; }
       return;
     }
     if (e.type === 'out') {
@@ -468,6 +516,14 @@ export class PadelGame {
     if (e.type === 'floor') {
       this.events.push({ e: 'ball', k: 'floor', x: e.x, y: 0, z: e.z, s: e.speed });
       const side = e.z < 0 ? 0 : 1;
+      if (r.exited && r.bounces >= 1 && Math.abs(e.x) > COURT.HALF_W && !r.exitBounce) { // outside the court one bounce is allowed before the return
+        r.exitBounce = true;
+        return;
+      }
+      if (!r.serving && r.bounces === 0 && Math.abs(e.x) > COURT.HALF_W) { // a return from outside must land inside the court
+        this.endPoint(1 - r.lastTeam, 'out');
+        return;
+      }
       if (r.serving) {
         if (!this.inServiceBox(e.x, e.z)) { this.fault(side === 1 - r.lastTeam ? 'long-or-wide' : 'short'); return; }
         r.serving = false;

@@ -8,6 +8,10 @@ export const COURT = {
   WALL_H: 4, // 3 m glass + 1 m mesh; anything above is out of play
   SERVICE_LINE: 6.95, // distance from the net
   BALL_R: 0.0335,
+  // access doors in the side walls near the net (doubles): the ball may leave through them after bouncing, and the receiver may follow it.
+  // Outside each side wall runs a fenced strip along the whole court, so a ball can be sent back around the net post and in through the other door.
+  DOOR: { z0: 1.4, z1: 3.0, h: 2.0 },
+  PIT: { z1: 9.2, w: 1.8 },
 };
 
 export const PHYS = {
@@ -19,6 +23,7 @@ export const PHYS = {
   DT: 1 / 60,
   MAGNUS: 0.012,
   DRAG: 0.06,
+  DRAG2: 0.0035, // quadratic air drag (per m/s)
   WALL_SPIN: 0.14,
 };
 

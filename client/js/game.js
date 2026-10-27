@@ -44,7 +44,7 @@ export class MatchClient {
     this.phase = 'serve';
     this.lastTeam = 0;
     this.serverSlot = -1;
-    this.me = { x: 0, z: 0, vx: 0, vz: 0, stamina: 100, team: this.team, xLim: start.settings.mode === 'singles' ? 3.25 : PLAYER.MAX_X };
+    this.me = { x: 0, z: 0, vx: 0, vz: 0, stamina: 100, team: this.team, xLim: start.settings.mode === 'singles' ? 3.25 : PLAYER.MAX_X, pit: start.settings.mode !== 'singles' && start.settings.openings !== false };
     this.pending = [];
     this.seq = 0;
     this.acc = 0;
@@ -256,6 +256,7 @@ export class MatchClient {
           break;
         }
         case 'ball': {
+          if (e.k === 'door') { later(() => this.hud.banner('Out the door!', 'Chase it outside', 1400)); break; }
           const pw = clamp((e.s || 4) / 9, 0.3, 1.4);
           later(() => {
             this.sound.play(e.k, { pan: e.x / 5, power: pw, mesh: e.k === 'wall' && e.y > 3 });

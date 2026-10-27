@@ -218,12 +218,35 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
         post(sx * 5, sz * 6, 4);
       }
     }
+    // side walls through the middle: mesh with an access door on each half (opening 1.4 .. 3.0 m from the net, 2 m high)
+    const { z0: dz0, z1: dz1, h: dh } = COURT.DOOR;
+    this.pitGroup = new THREE.Group();
+    s.add(this.pitGroup);
     for (const sx of [-1, 1]) {
       const x = sx * 5;
-      fence(12, 3, x, 1.5, 0, Math.PI / 2);
+      const segs = [[-6, -dz1], [-dz0, dz0], [dz1, 6]];
+      for (const [a, b] of segs) fence(b - a, 3, x, 1.5, (a + b) / 2, Math.PI / 2);
+      for (const sz of [-1, 1]) { // lintel above each door and a steel frame
+        fence(dz1 - dz0, 3 - dh, x, dh + (3 - dh) / 2, sz * (dz0 + dz1) / 2, Math.PI / 2);
+        rail(dz1 - dz0, x, dh, sz * (dz0 + dz1) / 2, Math.PI / 2);
+        post(x, sz * dz0, 4); post(x, sz * dz1, 4);
+      }
       fence(12, 1, x, 3.5, 0, Math.PI / 2);
       rail(20, x, 4, 0, Math.PI / 2); rail(20, x, 3, 0, Math.PI / 2);
       post(x, 0, 4);
+      // the strip outside the wall: concrete floor, outer fence, end fences
+      const xo = sx * (COURT.HALF_W + COURT.PIT.w);
+      const L = COURT.PIT.z1 * 2;
+      const slab = new THREE.Mesh(new THREE.PlaneGeometry(COURT.PIT.w, L), new THREE.MeshStandardMaterial({ color: 0x2b3340, roughness: 0.9 }));
+      slab.rotation.x = -Math.PI / 2; slab.position.set(sx * (COURT.HALF_W + COURT.PIT.w / 2), 0.004, 0); slab.receiveShadow = true;
+      this.pitGroup.add(slab);
+      const pf = (w, h, px, py, pz, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), meshMat(w, h)); m.position.set(px, py, pz); m.rotation.y = ry; this.pitGroup.add(m); };
+      pf(L, 3, xo, 1.5, 0, Math.PI / 2);
+      for (const sz of [-1, 1]) pf(COURT.PIT.w, 3, sx * (COURT.HALF_W + COURT.PIT.w / 2), 1.5, sz * COURT.PIT.z1, 0);
+      for (let zz = -COURT.PIT.z1; zz <= COURT.PIT.z1 + 0.01; zz += 3.07) {
+        const pp = new THREE.Mesh(new THREE.BoxGeometry(0.07, 3, 0.07), steel); pp.position.set(xo, 1.5, zz); this.pitGroup.add(pp);
+      }
+      const topRail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, L), steel); topRail.position.set(xo, 3, 0); this.pitGroup.add(topRail);
     }
     // glass panel seams and base rails
     const seamMat = new THREE.MeshStandardMaterial({ color: 0x20293a, roughness: 0.5, metalness: 0.5 });
@@ -326,6 +349,7 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
   setSingles(on) {
     this.courtGroup.scale.x = on ? 0.7 : 1;
     this.singlesGlass.visible = on;
+    if (this.pitGroup) this.pitGroup.visible = !on;
   }
 
   /** Draw (or clear) a translucent target rectangle on the opponents' half, for training drills. */
@@ -670,7 +694,7 @@ if (swinging) {
    * Everything is added to `group` so it is disposed with the environment.
    */
   makeCrowd(group, cfg = {}) {
-    const { rows = 5, sides = true, back = false, density = 0.7, xBase = 6.6, rowStep = 1.05, stepH = 0.45 } = cfg;
+    const { rows = 5, sides = true, back = false, density = 0.7, xBase = 7.3, rowStep = 1.05, stepH = 0.45 } = cfg;
     const pal = cfg.pal || [0x2f4a6b, 0x6b2f3a, 0x3d6b52, 0x7a6a3a, 0x4b4b5e, 0x8a8f99, 0x253244];
     const stepMat = cfg.stepMat || new THREE.MeshStandardMaterial({ color: 0x141c28, roughness: 0.9 });
     const people = [];

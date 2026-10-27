@@ -23,7 +23,8 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 - 🟡 It is a mathematical impact model driven by timing and distance, not a simulation of the racket's real orientation in 3D
 - 🟡 Aiming error now depends on contact quality, edge contact and running; the timing window is the same for every shot type
 - ❌ Collision sub-stepping / CCD (the 60 Hz step has not shown tunnelling in tests)
-- ❌ Off-court play (openings, chasing balls outside the court)
+- ✅ Off-court play (doubles): access doors in the side walls near the net (1.4–3.0 m from it, 2 m high) lead to a fenced strip along each side. After the first bounce a ball may leave through a door; the receiving team follows it, may let it bounce once outside, and must return it along the strip, round the net post and in through the other door so it lands in the opponents' court (hitting the glass, or landing outside, loses the point). A ball leaving without bouncing is out. Players and bots can walk out only through the doors; 1v1 stays fully walled. Unit-tested (physics, rules, movement, bots)
+- 🟡 Off-court play has not been played by a person: bots rarely produce door exits on their own, and the strip is narrow (1.8 m)
 - ❌ Stamina effects beyond sprint, player-player collisions beyond teammate separation
 
 ## Controls
@@ -52,6 +53,9 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 - ✅ `render.yaml` targets Render's Frankfurt (EU) region. A service's region cannot be changed once created: recreate the service from the Blueprint.
 
 ## Tests
-- 84 automated tests: scoring, rules, physics/spin, contact model, singles, career v2 (brackets, migration, rewards), drills, input, looks/courts, 4 real WebSocket clients.
+- 94 automated tests: scoring, rules, physics/spin, contact model, singles, career v2 (brackets, migration, rewards), drills, input, looks/courts, 4 real WebSocket clients.
 - Manually checked in the in-app browser: menu, equipment screen, the three courts (menu background), a night-arena practice match.
 - NOT checked: gamepad, audio, a real 4-human session, mobile, performance on low-end GPUs.
+
+## Ball physics (latest pass)
+- ✅ Quadratic air drag on top of linear drag, speed-dependent glass restitution, much deader mesh above 3 m, speed-dependent floor bounce, net-tape cord (pops over with lost pace) instead of always stopping at the tape

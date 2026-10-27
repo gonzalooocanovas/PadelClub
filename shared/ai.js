@@ -4,7 +4,7 @@
 // Four levels (the ids are what rooms and the career use):
 //   easy = Rookie   normal = Club   hard = Pro   expert = Legend
 
-import { clamp } from './constants.js';
+import { clamp, COURT } from './constants.js';
 import { predictBall } from './physics.js';
 import { STYLE_MODS } from './roster.js';
 
@@ -86,6 +86,11 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
   }
   mem.react = Math.max(0, mem.react - dt);
 
+  if (incoming && (b.ex || Math.abs(b.x) > COURT.HALF_W) && game.openings) {
+    outsideBall(inp, game, p, os, skill, mem);
+    return inp;
+  }
+
   if (incoming) {
     mem.planAge += dt;
     if (mem.planAge > skill.plan) {
@@ -127,6 +132,23 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
     formation(inp, game, p, os, skill);
   }
   return inp;
+}
+
+/** The ball left through a door: the nearer player of the receiving team follows it outside and returns it round the net post. */
+function outsideBall(inp, game, p, os, skill, mem) {
+  const b = game.ball;
+  const partner = game.players[p.slot ^ 1];
+  const mine = Math.hypot(b.x - p.x, b.z - p.z), theirs = partner.active ? Math.hypot(b.x - partner.x, b.z - partner.z) : Infinity;
+  if (theirs < mine - 0.3 || (Math.abs(theirs - mine) <= 0.3 && partner.slot < p.slot)) { formation(inp, game, p, os, skill); return; }
+  const s = Math.sign(b.x) || 1;
+  const doorZ = -os * (COURT.DOOR.z0 + COURT.DOOR.z1) / 2;
+  if (Math.abs(p.x) <= COURT.HALF_W - 0.05) { // still inside: walk to the door first
+    moveTo(inp, p, Math.abs(p.z - doorZ) > 0.5 ? s * 4.2 : s * 5.6, doorZ, skill, true);
+    return;
+  }
+  moveTo(inp, p, b.x - s * 0.5, b.z - os * 0.3, skill, true);
+  const d = Math.hypot(b.x - p.x, b.z - p.z);
+  if (!p.swing && p.cd <= 0 && d < 1.3 && b.y > 0.1 && b.y < 2.2 && mem.react <= 0) inp.swing = true;
 }
 
 /** Press so the ball reaches the sweet spot about 0.17 s into the swing (where the racket face is square). */

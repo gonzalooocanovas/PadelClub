@@ -24,6 +24,8 @@ Requires Node 20+. No build step: the client is plain ES modules served by the s
 
 **Career**: three seasons of tournaments (knockout draws and group stages, singles and doubles) against 16 named characters with their own playing styles. The matches you do not play are simulated with the same engine, so brackets and the world ranking are real. Earn ranking points, coins and development points; complete objectives to unlock rackets; use the Training tab for drills and the Development tab to improve nine attributes (small bonuses, solo only). Progress is saved in your browser.
 
+**Off-court play (2v2)**: each side wall has two access doors near the net. If the ball bounces and then leaves through a door, chase it outside and return it along the strip and in through the other door.
+
 **Bot levels**: Rookie, Club, Pro, Legend (pick them on the home screen, in the lobby, or via the career stage). Higher levels react faster, cover more ground, aim for open space and the lines, and mix globos, dejadas, slices and spin serves.
 
 **Public rooms**: the host can set *Room visibility → Public* in the lobby; open lobbies appear under *Rooms* on the home screen for one-click joining.
