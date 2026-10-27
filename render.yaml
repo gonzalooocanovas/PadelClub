@@ -1,0 +1,14 @@
+# One-click deploy on Render: New + > Blueprint > pick this repository.
+services:
+  - type: web
+    name: padel-club
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: node server/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: DATA_DIR
+        value: /tmp/padel-data   # free plan has no disk: profiles reset on redeploy

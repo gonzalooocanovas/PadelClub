@@ -1,0 +1,19 @@
+{
+  "name": "padel-club",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Online 4-player padel game: authoritative Node server + Three.js client",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "test": "node --test \"test/**/*.test.js\""
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "three": "^0.170.0",
+    "ws": "^8.22.0"
+  }
+}
