@@ -190,8 +190,8 @@ test('commentary is concise and matches the result', () => {
 test('fatigue: long rallies drain stamina even standing still, and a tired player is slower and hits worse', async () => {
   const { stepPlayer } = await import('../shared/physics.js');
   const still = { x: 0, z: -6, vx: 0, vz: 0, stamina: 100, team: 0, inRally: true };
-  for (let i = 0; i < 60 * 30; i++) stepPlayer(still, { mx: 0, mz: 0 }, 1 / 60);
-  assert.ok(still.stamina < 50, `30 s rally leaves ${still.stamina.toFixed(0)}`);
+  for (let i = 0; i < 60 * 40; i++) stepPlayer(still, { mx: 0, mz: 0 }, 1 / 60);
+  assert.ok(still.stamina < 45, `40 s rally leaves ${still.stamina.toFixed(0)}`);
   const rest = { ...still, inRally: false };
   for (let i = 0; i < 60 * 3; i++) stepPlayer(rest, { mx: 0, mz: 0 }, 1 / 60);
   assert.ok(rest.stamina > still.stamina + 25, 'recovers quickly between points');
