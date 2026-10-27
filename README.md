@@ -30,6 +30,8 @@ Requires Node 20+. No build step: the client is plain ES modules served by the s
 
 **Courts and equipment**: three environments (Premium Indoor Club, Mediterranean Court, Night Arena), chosen by the host in the lobby or on the home screen for solo play; the turf differs slightly (outdoor is a few percent slower). *Equipment* lets you pick one of 4 player archetypes, hair, skin and one of 8 cosmetic rackets, with a live 3D preview. Your look is shown to the other players. See DEV_CHECKLIST.md for what is and is not done.
 
+**Cameras**: Settings has four presets (player, broadcast, tactical, custom). **Racket contact**: the face angle comes from swing timing and the strike point from the distance to the sweet spot, so timing and positioning change the arc, spin, pace and accuracy of each shot. **Audio**: distinct shot sounds, court-specific rooms and ambience, optional announcer.
+
 **Practice vs AI** starts a room with you and three bots. Empty seats are only ever filled by clearly labelled AI.
 
 ### Controls

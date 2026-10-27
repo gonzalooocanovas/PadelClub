@@ -14,10 +14,10 @@ const SKILL = {
   // speed: top speed factor · react: seconds before reacting · noise: aim scatter · reach: swing distance
   // flub: chance to miss a ball outright · aggr: willingness to attack · lob/slice/smash: shot mix
   // serveSpin: chance of a spin serve · serveTiming: waits for the ideal bounce height · plan: replanning interval
-  easy: { speed: 0.9, sprint: true, react: 0.3, noise: 2.0, reach: 1.9, flub: 0.24, aggr: 0.12, lob: 0.35, slice: 0.08, smash: 0.35, serveSpin: 0, serveTiming: false, serveRisk: 0.0, plan: 0.12 },
-  normal: { speed: 0.96, sprint: true, react: 0.18, noise: 1.1, reach: 2.0, flub: 0.14, aggr: 0.3, lob: 0.45, slice: 0.18, smash: 0.5, serveSpin: 0.15, serveTiming: false, serveRisk: 0.3, plan: 0.1 },
-  hard: { speed: 1.0, sprint: true, react: 0.09, noise: 0.5, reach: 2.15, flub: 0.07, aggr: 0.5, lob: 0.5, slice: 0.25, smash: 0.7, serveSpin: 0.4, serveTiming: true, serveRisk: 0.6, plan: 0.07 },
-  expert: { speed: 1.04, sprint: true, react: 0.04, noise: 0.2, reach: 2.3, flub: 0.03, aggr: 0.75, lob: 0.55, slice: 0.3, smash: 0.85, serveSpin: 0.6, serveTiming: true, serveRisk: 0.85, plan: 0.05 },
+  easy: { speed: 0.9, sprint: true, react: 0.3, noise: 2.0, reach: 1.9, flub: 0.24, timingErr: 0.24, aggr: 0.12, lob: 0.35, slice: 0.08, smash: 0.35, serveSpin: 0, serveTiming: false, serveRisk: 0.0, plan: 0.12 },
+  normal: { speed: 0.96, sprint: true, react: 0.18, noise: 1.1, reach: 2.0, flub: 0.14, timingErr: 0.14, aggr: 0.3, lob: 0.45, slice: 0.18, smash: 0.5, serveSpin: 0.15, serveTiming: false, serveRisk: 0.3, plan: 0.1 },
+  hard: { speed: 1.0, sprint: true, react: 0.09, noise: 0.5, reach: 2.15, flub: 0.07, timingErr: 0.07, aggr: 0.5, lob: 0.5, slice: 0.25, smash: 0.7, serveSpin: 0.4, serveTiming: true, serveRisk: 0.6, plan: 0.07 },
+  expert: { speed: 1.04, sprint: true, react: 0.04, noise: 0.2, reach: 2.3, flub: 0.03, timingErr: 0.03, aggr: 0.75, lob: 0.55, slice: 0.3, smash: 0.85, serveSpin: 0.6, serveTiming: true, serveRisk: 0.85, plan: 0.05 },
 };
 
 export function makeBotMemory() {
@@ -58,6 +58,7 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
     mem.lastTeam = r.lastTeam; mem.planAge = 99;
     mem.react = r.serving ? 0.05 : skill.react;
     mem.flub = rnd() < skill.flub * (r.serving ? 0.35 : 1);
+    mem.jit = (rnd() - 0.5) * skill.timingErr; // each level presses a little earlier or later
   }
   mem.react = Math.max(0, mem.react - dt);
 
@@ -94,7 +95,7 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
     const dist = Math.hypot(dx, dz);
     const onMySide = p.team === 0 ? b.z < 0.2 : b.z > -0.2;
     if (responsible && onMySide && !p.swing && p.cd <= 0 && !r.serving
-        && dist < skill.reach && !mem.flub && b.y < 2.9 && b.y > 0.1 && mem.react <= 0) {
+        && dist < skill.reach && !mem.flub && b.y < 2.9 && b.y > 0.1 && mem.react <= 0 && swingNow(b, dx, dz, dist, mem)) {
       chooseShot(inp, game, p, os, skill);
       inp.swing = true;
     }
@@ -102,6 +103,13 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
     formation(inp, game, p, os, skill);
   }
   return inp;
+}
+
+/** Press so the ball reaches the sweet spot about 0.17 s into the swing (where the racket face is square). */
+function swingNow(b, dx, dz, dist, mem) {
+  const closing = -(dx * b.vx + dz * b.vz) / (dist || 1);
+  const ttc = Math.max(0, dist - 0.95) / Math.max(closing, 1.5);
+  return dist < 1.25 || ttc <= 0.17 + (mem.jit || 0);
 }
 
 /** Serve: stronger levels wait for the ball at waist height, aim for the corners and add spin. */

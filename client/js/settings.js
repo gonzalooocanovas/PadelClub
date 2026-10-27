@@ -3,9 +3,16 @@ import { store } from './net.js';
 const DEFAULTS = {
   quality: 'medium', // low | medium | high
   master: 0.7,
-  ambience: 0.25,
+  sfx: 0.9,
+  ambience: 0.5,
+  voice: 0.8,
+  announcer: false, // spoken score calls (uses the browser's speech synthesis)
+  camera: 'player', // player | broadcast | tactical | custom
   camDist: 7.2,
   camHeight: 4.6,
+  camSmooth: 7,
+  camFov: 52,
+  ballTrack: true, // the view drifts toward the ball (never changes how you move or aim)
   ballScale: 3,
   timing: true,
   trail: true,

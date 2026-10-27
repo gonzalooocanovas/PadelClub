@@ -19,8 +19,9 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 
 ## Physics and gameplay
 - ✅ Spin (Magnus), drag, spin-dependent bounces, shot solver that compensates spin and drag, per-shot spin and speed profiles
-- ❌ Racket-face contact model (open/closed face, edge hits, swing velocity); spin is still chosen per shot type
-- ❌ Honest aiming error model beyond contact quality; contextual timing windows per shot type
+- ✅ Racket contact model (shared/game.js): swing timing sets the face angle (open = higher, slower arc + backspin; closed = flatter + topspin, no net help when very closed); distance from the sweet spot stands for the point on the face (edge hits lose pace and scatter); sideways running costs accuracy, moving into the shot adds pace; the racket meets the ball at the sweet spot instead of the first instant it is in reach. Labels: perfect / clean / early / late / off-centre / poor. Tests in test/contact.test.js
+- 🟡 It is a mathematical impact model driven by timing and distance, not a simulation of the racket's real orientation in 3D
+- 🟡 Aiming error now depends on contact quality, edge contact and running; the timing window is the same for every shot type
 - ❌ Collision sub-stepping / CCD (the 60 Hz step has not shown tunnelling in tests)
 - ❌ Off-court play (openings, chasing balls outside the court)
 - ❌ Stamina effects beyond sprint, player-player collisions beyond teammate separation
@@ -36,8 +37,13 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 - 🟡 8-stage ladder with named opponents/partners, stars, XP, per-stage court and looks, progress saved in the browser
 - ❌ Seasons, calendar, tournament brackets, training drills, player attributes, objectives, narrative, versioned save migration
 
+## Camera
+- ✅ Presets: player, broadcast, tactical, custom (distance, height, smoothing, field of view); optional drift toward the ball; the camera never rotates with the movement keys
+
 ## Audio
-- ❌ Sample-based audio library (audio is still synthesised with Web Audio), per-court acoustics, separate music/commentary volumes
+- ✅ Rewritten engine (client/js/audio.js): a distinct sound per shot type, character changes with contact quality, glass vs mesh, footsteps and skids from the animation, per-court room reverb and ambience (hall / wind and birds / crowd and insects), random variation and rate limits, separate effects / environment / announcer volumes, optional spoken score calls (browser speech synthesis)
+- 🟡 All sounds are still synthesised (no recorded samples are shipped). Not listened to by a person in this session: only checked that nothing throws
+- ❌ Music (there is none), recorded effort/celebration sounds, crowd announcements
 
 ## Multiplayer, deployment
 - ✅ 4-player authoritative rooms, reconnect, 60 Hz snapshots, looks and court synchronised (tests)

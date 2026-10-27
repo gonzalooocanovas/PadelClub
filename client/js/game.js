@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { stepPlayer, serveLimit } from '/shared/physics.js';
 import { COURT, PLAYER, SHOT_IDS, clamp } from '/shared/constants.js';
 import { settings } from './settings.js';
+import { scoreCallout } from './audio.js';
 
 const TICK = 1 / 60;
 const INTERP = 0.1; // seconds of render delay used to interpolate remote entities
@@ -14,6 +15,18 @@ const REASONS = {
   bounce: 'Winner', 'out-after-bounce': 'Out of play', out: 'Out', net: 'Net',
   'own-side': 'Short', 'double-fault': 'Double fault',
 };
+
+// Camera presets. dist/height: behind and above the player · follow: how much it tracks sideways · lookAhead: metres in front
+// of the player it looks at (center: look at the middle of the court instead) · ball: pull toward the ball · smooth: follow speed
+export const CAMERAS = {
+  player: { dist: 7.2, height: 4.6, follow: 0.85, lookAhead: 9, ball: 0.25, smooth: 7, fov: 52 },
+  broadcast: { dist: 12.5, height: 9, follow: 0.18, center: true, ball: 0.12, smooth: 4, fov: 42 },
+  tactical: { dist: 5, height: 14, follow: 0.5, lookAhead: 4, ball: 0.1, smooth: 5, fov: 54 },
+};
+export function cameraConfig(s) {
+  if (s.camera === 'custom') return { dist: s.camDist, height: s.camHeight, follow: 0.85, lookAhead: 9, ball: 0.25, smooth: s.camSmooth, fov: s.camFov };
+  return CAMERAS[s.camera] || CAMERAS.player;
+}
 
 const QUICK = ['Nice shot!', 'Mine!', 'Yours!', 'Switch!'];
 
@@ -51,7 +64,10 @@ export class MatchClient {
     this.bind();
     this.hud.setScore(start.score, this.names);
     this.world.setBallScale(settings.ballScale);
-    this.sound.startAmbience();
+    this.sound.startAmbience(this.world.courtId);
+    this.sound.setCourt(this.world.courtId);
+    this.world.onStep = (i, sp, x) => this.sound.play('step', { i, speed: sp, pan: x / 5, power: i === this.slot ? 1 : 0.45 });
+    this.world.onSkid = (i, x) => this.sound.play('skid', { i, pan: x / 5, power: i === this.slot ? 1 : 0.5 });
   }
 
   // ------------------------------------------------------------------ input
@@ -88,6 +104,7 @@ export class MatchClient {
     this.unsubs?.forEach((u) => u());
     document.removeEventListener('visibilitychange', this.onVis);
     this.sound.stopAmbience();
+    this.world.onStep = null; this.world.onSkid = null;
   }
 
   setPaused(p) { this.paused = p; if (p) this.input.clear(); }
@@ -216,13 +233,15 @@ export class MatchClient {
         case 'serve': {
           this.serverSlot = e.slot;
           this.hud.setScore(e.score, this.names);
+          if (e.score.matchPoint) this.sound.play('matchpoint');
+          this.sound.announce(scoreCallout(e.score, e.score.server?.team));
           const mine = e.slot === this.slot;
           this.hud.banner(mine ? 'Your serve' : `${this.names[e.slot]} serves`, e.score.label || scoreCall(e.score), 2000);
           break;
         }
         case 'hit': {
           later(() => {
-            this.sound.play(e.kind === 'smash' ? 'smash' : 'hit', { pan: e.x / 5 });
+            this.sound.play('hit', { kind: e.kind, label: e.label, pan: e.x / 5, power: 0.75 + 0.25 * (e.q ?? 1) });
             this.world.spawnFx('hit', e.x, e.y, e.z, e.kind === 'smash' ? 1.6 : 1);
             this.world.punch(e.kind === 'smash' ? 2.4 : 0.9);
           });
@@ -239,7 +258,7 @@ export class MatchClient {
         case 'ball': {
           const pw = clamp((e.s || 4) / 9, 0.3, 1.4);
           later(() => {
-            this.sound.play(e.k, { pan: e.x / 5, power: pw });
+            this.sound.play(e.k, { pan: e.x / 5, power: pw, mesh: e.k === 'wall' && e.y > 3 });
             this.world.spawnFx(e.k, e.x, e.y, e.z, pw, e.axis);
           });
           break;
@@ -262,10 +281,11 @@ export class MatchClient {
           if (top) {
             const word = { match: 'Game, set & match', set: 'Set', game: 'Game' }[top.type];
             this.hud.banner(word, `${team} · ${why}`, 2200);
-            this.sound.play(top.type === 'match' ? 'match' : 'game');
+            this.sound.play(top.type === 'match' ? 'match' : top.type === 'set' ? 'set' : 'game');
+            this.sound.announce(top.type === 'match' ? 'Game, set and match' : top.type === 'set' ? 'Set' : 'Game');
           } else {
             this.hud.banner(why, `${team} wins the point`, 1800);
-            this.sound.play('point');
+            this.sound.play(e.winner === this.team ? 'point' : 'lose');
           }
           break;
         }
@@ -406,21 +426,20 @@ export class MatchClient {
 
   updateCamera(dt) {
     const cam = this.world.camera;
-    const want = new THREE.Vector3(
-      this.me.x * 0.85,
-      settings.camHeight,
-      this.me.z - this.os * settings.camDist,
-    );
-    // never sit inside the glass at the opposite end
-    want.z = clamp(want.z, -16, 16);
+    const c = cameraConfig(settings);
+    const want = new THREE.Vector3(this.me.x * c.follow, c.height, this.me.z - this.os * c.dist);
+    // stay inside the venue walls (the room backdrop is at 17 m)
+    want.z = clamp(want.z, -15.5, 15.5);
     if (!this.camPos) this.camPos = want.clone();
-    this.camPos.lerp(want, 1 - Math.exp(-dt * 7));
+    this.camPos.lerp(want, 1 - Math.exp(-dt * c.smooth));
     const ball = this.ballView;
-    const focus = new THREE.Vector3(this.me.x * 0.6, 0.6, this.me.z + this.os * 9);
-    // gently follow the ball without losing sight of our own player
-    const bx = new THREE.Vector3(ball.x, Math.min(ball.y, 2), ball.z);
-    focus.lerp(bx, 0.25);
-    this.camLook.lerp(focus, 1 - Math.exp(-dt * 6));
+    const focus = c.center
+      ? new THREE.Vector3(this.me.x * 0.3, 0.8, 0)
+      : new THREE.Vector3(this.me.x * 0.6, 0.6, this.me.z + this.os * c.lookAhead);
+    // optionally drift toward the ball; this only moves the view, never the aim or the controls
+    if (settings.ballTrack) focus.lerp(new THREE.Vector3(ball.x, Math.min(ball.y, 2), ball.z), c.ball);
+    this.camLook.lerp(focus, 1 - Math.exp(-dt * c.smooth * 0.85));
+    this.world.baseFov = c.fov;
     cam.position.copy(this.camPos);
     cam.lookAt(this.camLook);
   }

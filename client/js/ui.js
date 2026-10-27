@@ -227,10 +227,10 @@ export class UI {
       },
       feedback(label, kind) {
         const f = $('#feedback'); if (!f || !settings.timing) return;
-        const nice = { perfect: 'Perfect', good: 'Good', early: 'Early', late: 'Late', poor: 'Poor contact', serve: 'Serve' }[label] || label;
+        const nice = { perfect: 'Perfect', clean: 'Clean', good: 'Good', early: 'Early', late: 'Late', 'off-centre': 'Off-centre', poor: 'Poor contact', serve: 'Serve' }[label] || label;
         const shot = { lob: 'globo', vibora: 'víbora', chiquita: 'chiquita', drop: 'dejada', block: 'bloqueo', slice: 'slice', bandeja: 'bandeja', smash: 'remate', serve: 'saque' }[kind] || kind;
         f.textContent = `${nice} · ${shot}`;
-        f.className = `feedback show ${label === 'perfect' ? 'perfect' : label === 'good' || label === 'serve' ? 'good' : 'bad'}`;
+        f.className = `feedback show ${label === 'perfect' ? 'perfect' : label === 'good' || label === 'clean' || label === 'serve' ? 'good' : 'bad'}`;
         clearTimeout(this.ft);
         this.ft = setTimeout(() => f.classList.remove('show'), 900);
       },
@@ -403,9 +403,14 @@ export class UI {
     const el = this.openModal(`<h2>Settings</h2>
       <div class="setting"><span>Graphics quality</span><div class="seg">${['low', 'medium', 'high'].map((q) => `<button data-act="quality" data-val="${q}" class="${settings.quality === q ? 'on' : ''}">${q}</button>`).join('')}</div></div>
       ${range('master', 0, 1, 0.05, 'Master volume')}
-      ${range('ambience', 0, 1, 0.05, 'Crowd ambience')}
-      ${range('camDist', 5, 10, 0.1, 'Camera distance')}
-      ${range('camHeight', 3, 7, 0.1, 'Camera height')}
+      ${range('sfx', 0, 1, 0.05, 'Effects volume')}
+      ${range('ambience', 0, 1, 0.05, 'Environment volume')}
+      ${tog('announcer', 'Announcer (spoken score)')}
+      ${range('voice', 0, 1, 0.05, 'Announcer volume')}
+      <p class="mute" style="font-size:12px;margin:2px 0">There is no music track in the game yet.</p>
+<div class="setting"><span>Camera</span><div class="seg">${['player', 'broadcast', 'tactical', 'custom'].map((c) => `<button data-act="camera" data-val="${c}" class="${settings.camera === c ? 'on' : ''}">${c}</button>`).join('')}</div></div>
+      ${tog('ballTrack', 'Camera drifts toward the ball')}
+      ${settings.camera === 'custom' ? range('camDist', 4, 16, 0.1, 'Custom: distance') + range('camHeight', 2.5, 16, 0.1, 'Custom: height') + range('camSmooth', 2, 12, 0.5, 'Custom: smoothing') + range('camFov', 36, 70, 1, 'Custom: field of view') : '<p class="mute" style="font-size:12px;margin:4px 0">Player: behind you · Broadcast: whole court, high · Tactical: overhead view of the positions · Custom: your own distance, height, smoothing and field of view.</p>'}
       ${range('ballScale', 1, 4, 0.1, 'Ball size (visibility)')}
       ${tog('timing', 'Timing indicator')}
       ${tog('trail', 'Ball trail')}

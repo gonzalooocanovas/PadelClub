@@ -119,6 +119,7 @@ export class World {
     this.resize();
     this.clock = 0;
     this.fovKick = 0;
+    this.baseFov = 52;
     window.addEventListener('resize', () => this.resize());
   }
 
@@ -426,6 +427,11 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
     const sp = pl.speedS;
     pl.phase += dt * sp * 2.2;
     const ph = pl.phase;
+    { // a foot lands every half stride; a hard stop skids
+      const sg = Math.sign(Math.sin(ph));
+      if (pl.lastSg !== undefined && sg !== pl.lastSg && sp > 1.2 && !swinging && v.jumpT <= 0) this.onStep?.(i, sp, v.x);
+      pl.lastSg = sg;
+    }
     const run = Math.min(1, sp / 6);
     const moving = sp > 0.35 ? 1 : 0;
     const pitchAmp = Math.min(1.2, Math.abs(vf) / 6) * (0.35 + 0.5 * run) * moving;
@@ -484,6 +490,7 @@ if (swinging) {
     pl.accS = (pl.accS || 0) + (((sp - (pl.prevSp ?? sp)) / Math.max(dt, 1e-3)) - (pl.accS || 0)) * Math.min(1, dt * 6);
     pl.prevSp = sp;
     const leanA = THREE.MathUtils.clamp(pl.accS * 0.012, -0.12, 0.18) * calm;
+    if (pl.accS < -16 && sp > 3 && !swinging) this.onSkid?.(i, v.x);
     const brake = THREE.MathUtils.clamp(-pl.accS * 0.012, 0, 0.18) * calm;
     // landing from a jump: absorb with the knees
     if (pl.wasJump && !(v.jumpT > 0)) pl.land = 0.28;
@@ -791,7 +798,7 @@ if (swinging) {
     this.updateFx(dt);
     this.updateCrowd();
     if (this.backWall) { const cz = this.camera.position.z; for (const o of this.backWall) o.visible = !(Math.abs(cz) > 9.5 && Math.sign(cz) === Math.sign(o.position.z)); }
-    if (this.fovKick > 0.01) { this.fovKick *= Math.exp(-dt * 9); this.camera.fov = 52 + this.fovKick; this.camera.updateProjectionMatrix(); } else if (this.camera.fov !== 52 && !window.__freeze) { this.camera.fov = 52; this.camera.updateProjectionMatrix(); }
+    if (this.fovKick > 0.01) { this.fovKick *= Math.exp(-dt * 9); this.camera.fov = this.baseFov + this.fovKick; this.camera.updateProjectionMatrix(); } else if (this.camera.fov !== this.baseFov && !window.__freeze) { this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix(); }
     if (this.bloom && this.composer) this.composer.render(dt); else this.renderer.render(this.scene, this.camera);
   }
 }

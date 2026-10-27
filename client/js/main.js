@@ -48,7 +48,7 @@ world.setQuality(settings.quality);
 world.setBallScale(settings.ballScale);
 onSetting((k) => {
   if (k === 'ballScale') world.setBallScale(settings.ballScale);
-  if (k === 'master' || k === 'ambience') sound.applyVolume();
+  if (['master', 'sfx', 'ambience', 'voice'].includes(k)) sound.applyVolume();
 });
 
 const val = (id) => document.getElementById(id)?.value ?? '';
@@ -207,6 +207,7 @@ function act(name, d, el) {
     }
     case 'previewMode': if (preview) { if (d.val === 'racket') preview.setRacket(myLook.racket); else preview.setCharacter(myLook, previewTeam); } break;
     case 'previewTeam': previewTeam ^= 1; if (preview && preview.mode === 'character') preview.setCharacter(myLook, previewTeam); break;
+    case 'camera': setSetting('camera', d.val); ui.settingsModal(() => {}); break;
     case 'controlsSettings': openControls(); break;
     case 'scheme': applyScheme(input.settings, d.val); input.save(); openControls(); break;
     case 'ctrlDevice': ctrl.device = d.val; ctrl.capture = null; input.cancelCapture(); openControls(); break;

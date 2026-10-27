@@ -159,8 +159,14 @@ export class PadelGame {
       if (live && !p.swing.done && p.swing.t >= PLAYER.CONTACT_FROM && p.swing.t <= PLAYER.CONTACT_TO) {
         if (this.phase === 'serve') {
           if (p.slot === this.serverSlot && this.serveWait <= 0) { this.doServe(p); p.swing.done = true; }
-        } else if (this.contact(p)) {
-          p.swing.done = true;
+        } else {
+          // the racket meets the ball at the sweet spot: wait for it unless it is already leaving or the window is closing
+          const bb = this.ball;
+          const d = Math.hypot(bb.x - p.x, bb.z - p.z);
+          const approaching = d < (p.swing.lastD ?? Infinity) - 1e-6;
+          p.swing.lastD = d;
+          const ready = d <= 1.2 || !approaching || p.swing.t >= PLAYER.CONTACT_TO - 2 * dt;
+          if (ready && this.contact(p)) p.swing.done = true;
         }
       }
       if (p.swing.t >= PLAYER.SWING_TIME) { p.swing = null; p.cd = PLAYER.SWING_COOLDOWN - PLAYER.SWING_TIME; }
@@ -261,7 +267,14 @@ export class PadelGame {
    * Choose where the ball should land, how fast and with which spin, then solve the launch velocity
    * through the real ball physics (so drag and Magnus lift are compensated and the aim stays honest).
    */
-  planShot(kind, b, os, aimX, aimZ, q, inSpeed = 0, spinOv = null) {
+  /**
+   * ctx (optional) is the racket contact: {face, e, lateral, forward}
+   *   face    -1 closed .. +1 open (from swing timing and ball height): an open face launches higher and adds backspin,
+   *           a closed face is flatter with topspin and gets no net-clearance help when strongly closed
+   *   e       distance of the strike from the sweet spot in metres (0 = centre of the face): edge hits lose pace and scatter
+   *   lateral sideways running speed (m/s): costs accuracy;  forward: speed toward the net (m/s): adds a little pace
+   */
+  planShot(kind, b, os, aimX, aimZ, q, inSpeed = 0, spinOv = null, ctx = null) {
     const lim = this.singles ? 3.2 : 4.5;
     let tx = clamp(aimX, -lim, lim);
     let depth = clamp(Math.abs(aimZ), 1, 9.4);
@@ -286,22 +299,29 @@ export class PadelGame {
       default: depth = clamp(depth, 3, 9.2);
     }
     if (spinOv) { sb = spinOv.sb; ss = spinOv.ss || 0; }
+    if (ctx) {
+      sb += ctx.face * 5; // spin transfer from the face angle
+      speed *= 1 - 0.22 * clamp(ctx.e / 0.85, 0, 1); // energy lost off-centre
+      speed *= 1 + clamp(ctx.forward, -3, 3) * 0.012; // moving into the shot adds pace
+    }
     const spinQ = 0.4 + 0.6 * q; // mishit balls carry less spin
     sb *= spinQ; ss *= spinQ;
     let tz = os * depth;
-    const err = (1 - q) * (kind === 'serve' ? 0.8 : 1.7);
+    let err = (1 - q) * (kind === 'serve' ? 0.8 : 1.7);
+    if (ctx) err *= 1 + 0.8 * clamp((ctx.e - 0.4) / 0.45, 0, 1) + 0.05 * ctx.lateral; // edge hits and sideways running are less reliable
     tx += (this.rng() - 0.5) * 2 * err;
     tz += (this.rng() - 0.5) * 2 * err * 0.8;
     const dist = Math.hypot(tx - b.x, tz - b.z);
     let T = kind === 'lob'
       ? clamp(1.5 + dist * 0.05, 1.7, 2.4)
       : dist / (speed * (0.8 + 0.4 * q + Math.min(0.2, inSpeed * 0.007))); // returns carry some of the incoming pace
+    if (ctx && kind !== 'lob' && kind !== 'serve') T *= 1 + 0.16 * ctx.face; // open face = higher, slower arc
     T = Math.max(T, 0.28);
     const spin = { sb, ss };
     let aimX2 = tx, aimZ2 = tz;
     let v = solveLaunch(b, aimX2, aimZ2, T);
     // well-struck balls clear the net; poor contact does not get that help
-    if (kind !== 'lob') {
+    if (kind !== 'lob' && (!ctx || ctx.face > -0.6)) {
       for (let i = 0; i < 18; i++) {
         const sim = simulateShot(b, v, spin);
         if (sim.netH === null || sim.netH >= NET_CLEAR) break;
@@ -370,14 +390,24 @@ export class PadelGame {
     if ((p.vx * -dx + p.vz * -dz) / (d || 1) < -2.5) q -= 0.1; // running away from the ball
     q = clamp(q * 0.8 + 0.2, 0.3, 1); // forgiving: contact is never worse than "late"
 
-    let label = 'poor';
-    if (q >= 0.82) label = 'perfect';
-    else if (q >= 0.6) label = 'good';
-    else if (q >= 0.3) label = fwdDist > 0.9 ? 'early' : 'late';
+    // racket contact: timing sets the face angle, the distance from the sweet spot stands for the point on the face
+    // timing > 0: the ball met the racket late in the swing (swing started early), < 0: early in the swing (started late).
+    // Met before the swing peaked = behind the ball, face open (higher, slower, backspin); met after = out in front, face closed.
+    const timing = clamp((sw.t - 0.17) / 0.12, -1, 1);
+    const face = clamp(-timing * 0.8 + (b.y < 0.5 ? 0.4 : b.y > 1.6 && b.y <= 2.1 ? -0.2 : 0), -1, 1);
+    const e = Math.abs(d - 0.95);
+    const ctx = { face, e, lateral: Math.abs(p.vx), forward: p.vz * os };
+
+    let label;
+    if (q < 0.4) label = 'poor';
+    else if (e > 0.55) label = 'off-centre';
+    else if (q >= 0.82) label = 'perfect';
+    else if (q >= 0.62) label = 'clean';
+    else label = timing < 0 ? 'late' : 'early';
 
     const inSpeed = Math.hypot(b.vx, b.vy, b.vz);
     const aim = this.aimFor(p);
-    const v = this.planShot(kind, b, os, aim.ax, aim.az, q, inSpeed);
+    const v = this.planShot(kind, b, os, aim.ax, aim.az, q, inSpeed, null, ctx);
     b.vx = v.vx; b.vy = v.vy; b.vz = v.vz; b.sb = v.sb; b.ss = v.ss;
 
     r.lastTeam = p.team; r.lastSlot = p.slot; r.bounces = 0; r.hits++; r.netTouched = false; r.serving = false;
@@ -388,7 +418,7 @@ export class PadelGame {
     if (kind === 'bandeja') st.bandejas++;
     if (kind === 'vibora') st.viboras++;
     this.stats.longestRally = Math.max(this.stats.longestRally, r.hits);
-    this.events.push({ e: 'hit', slot: p.slot, kind, q: +q.toFixed(2), label, x: b.x, y: b.y, z: b.z, sb: v.sb, ss: v.ss });
+    this.events.push({ e: 'hit', slot: p.slot, kind, q: +q.toFixed(2), label, face: +face.toFixed(2), off: +e.toFixed(2), x: b.x, y: b.y, z: b.z, sb: v.sb, ss: v.ss });
     return true;
   }
 
