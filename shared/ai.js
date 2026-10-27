@@ -6,6 +6,7 @@
 
 import { clamp } from './constants.js';
 import { predictBall } from './physics.js';
+import { STYLE_MODS } from './roster.js';
 
 export const BOT_LEVELS = ['easy', 'normal', 'hard', 'expert'];
 export const BOT_LABELS = { easy: 'Rookie', normal: 'Club', hard: 'Pro', expert: 'Legend' };
@@ -19,6 +20,29 @@ const SKILL = {
   hard: { speed: 1.0, sprint: true, react: 0.09, noise: 0.5, reach: 2.15, flub: 0.07, timingErr: 0.07, aggr: 0.5, lob: 0.5, slice: 0.25, smash: 0.7, serveSpin: 0.4, serveTiming: true, serveRisk: 0.6, plan: 0.07 },
   expert: { speed: 1.04, sprint: true, react: 0.04, noise: 0.2, reach: 2.3, flub: 0.03, timingErr: 0.03, aggr: 0.75, lob: 0.55, slice: 0.3, smash: 0.85, serveSpin: 0.6, serveTiming: true, serveRisk: 0.85, plan: 0.05 },
 };
+
+const skillCache = new Map();
+/**
+ * A bot is a level ('easy'..'expert') optionally with a style ({level, style}). The style shifts the level's tendencies:
+ * where the bot stands (netZ/backZ) and how often it attacks, lobs, slices and smashes.
+ */
+export function skillFor(d) {
+  const level = typeof d === 'object' && d ? d.level : d;
+  const style = typeof d === 'object' && d ? d.style : null;
+  const key = level + '|' + style;
+  if (skillCache.has(key)) return skillCache.get(key);
+  const base = { ...(SKILL[level] || SKILL.normal) };
+  const m = STYLE_MODS[style] || {};
+  for (const [k, v] of Object.entries(m)) {
+    if (k === 'netZ' || k === 'backZ') base[k] = v;
+    else base[k] = (base[k] ?? 0) + v;
+  }
+  for (const k of ['aggr', 'lob', 'slice', 'smash', 'flub']) base[k] = Math.max(0, Math.min(1, base[k]));
+  base.speed = Math.max(0.8, Math.min(1.1, base.speed));
+  base.noise = Math.max(0.1, base.noise);
+  skillCache.set(key, base);
+  return base;
+}
 
 export function makeBotMemory() {
   return { serveT: 0, plan: null, planAge: 99, react: 0, lastTeam: -1, flub: false };
@@ -38,7 +62,7 @@ function moveTo(inp, p, tx, tz, skill, allowSprint) {
 }
 
 export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
-  const skill = SKILL[difficulty] || SKILL.normal;
+  const skill = skillFor(difficulty);
   const p = game.players[slot];
   const inp = blank();
   const os = p.team === 0 ? 1 : -1;
@@ -132,12 +156,12 @@ function serve(inp, game, p, os, skill, mem, dt) {
 
 function formation(inp, game, p, os, skill) {
   const b = game.ball;
-  if (game.singles) { moveTo(inp, p, clamp(b.x * 0.45, -2.4, 2.4), -os * 6.3, skill, false); return; }
+  if (game.singles) { moveTo(inp, p, clamp(b.x * 0.45, -2.4, 2.4), -os * ((skill.backZ ?? 6.4) - 0.1), skill, false); return; }
   // whoever is already nearer the net holds it (the server's partner starts there), the other covers the back
   const partner = game.players[p.slot ^ 1];
   const dp = Math.abs(p.z), dq = Math.abs(partner.z);
   const net = dp < dq || (dp === dq && p.slot % 2 === 0);
-  const tz = -os * (net ? 2.9 : 6.4);
+  const tz = -os * (net ? (skill.netZ ?? 2.9) : (skill.backZ ?? 6.4));
   const off = net ? (p.team === 0 ? -1.3 : 1.3) : (p.team === 0 ? 1.3 : -1.3);
   const tx = clamp(b.x * 0.45 + off, -3.6, 3.6);
   moveTo(inp, p, tx, tz, skill, false);

@@ -31,6 +31,7 @@ export class PadelGame {
       singles: this.settings.mode === 'singles',
     });
     this.singles = this.settings.mode === 'singles';
+    this.mods = this.settings.attrMods || null; // player development (local matches only): small modifiers for slot 0
     this.xLim = this.singles ? 3.25 : PLAYER.MAX_X; // 1v1 is played on a narrower, fully walled court
     this.players = [0, 1, 2, 3].map((slot) => ({
       slot, team: slot >> 1,
@@ -40,6 +41,7 @@ export class PadelGame {
       active: !(this.settings.mode === 'singles' && (slot === 1 || slot === 3)),
       xLim: this.settings.mode === 'singles' ? 3.25 : PLAYER.MAX_X,
     }));
+    if (this.mods) { this.players[0].speedMul = this.mods.runMul; this.players[0].regenMul = this.mods.regenMul; }
     this.ball = makeBall();
     this.ball.hw = this.singles ? 3.5 : COURT.HALF_W;
     const surf = (COURTS[this.settings.court] || COURTS.indoor).surface; // each court has its own turf
@@ -156,7 +158,7 @@ export class PadelGame {
       if (!p.swing) continue;
       p.swing.t += dt;
       if (live && this.phase === 'rally' && !p.swing.done && p.swing.t < PLAYER.CONTACT_TO) this.lunge(p, dt);
-      if (live && !p.swing.done && p.swing.t >= PLAYER.CONTACT_FROM && p.swing.t <= PLAYER.CONTACT_TO) {
+      if (live && !p.swing.done && p.swing.t >= PLAYER.CONTACT_FROM && p.swing.t <= PLAYER.CONTACT_TO * (p.slot === 0 && this.mods ? this.mods.window : 1)) {
         if (this.phase === 'serve') {
           if (p.slot === this.serverSlot && this.serveWait <= 0) { this.doServe(p); p.swing.done = true; }
         } else {
@@ -301,6 +303,7 @@ export class PadelGame {
     if (spinOv) { sb = spinOv.sb; ss = spinOv.ss || 0; }
     if (ctx) {
       sb += ctx.face * 5; // spin transfer from the face angle
+      sb *= ctx.spinMul || 1; ss *= ctx.spinMul || 1;
       speed *= 1 - 0.22 * clamp(ctx.e / 0.85, 0, 1); // energy lost off-centre
       speed *= 1 + clamp(ctx.forward, -3, 3) * 0.012; // moving into the shot adds pace
     }
@@ -389,6 +392,10 @@ export class PadelGame {
     if (Math.hypot(p.vx, p.vz) > 6.2) q -= 0.08; // off balance at full sprint
     if ((p.vx * -dx + p.vz * -dz) / (d || 1) < -2.5) q -= 0.1; // running away from the ball
     q = clamp(q * 0.8 + 0.2, 0.3, 1); // forgiving: contact is never worse than "late"
+    if (p.slot === 0 && this.mods) { // development bonus for the matching skill, kept small
+      const grp = { forehand: 'ground', backhand: 'ground', volley: 'volley', smash: 'smash', bandeja: 'smash', vibora: 'smash', lob: 'lob', slice: 'defense', block: 'defense', chiquita: 'defense', drop: 'defense' }[kind];
+      q = clamp(q + (this.mods.q[grp] || 0), 0.3, 1);
+    }
 
     // racket contact: timing sets the face angle, the distance from the sweet spot stands for the point on the face
     // timing > 0: the ball met the racket late in the swing (swing started early), < 0: early in the swing (started late).
@@ -396,7 +403,7 @@ export class PadelGame {
     const timing = clamp((sw.t - 0.17) / 0.12, -1, 1);
     const face = clamp(-timing * 0.8 + (b.y < 0.5 ? 0.4 : b.y > 1.6 && b.y <= 2.1 ? -0.2 : 0), -1, 1);
     const e = Math.abs(d - 0.95);
-    const ctx = { face, e, lateral: Math.abs(p.vx), forward: p.vz * os };
+    const ctx = { face, e, lateral: Math.abs(p.vx), forward: p.vz * os, spinMul: p.slot === 0 && this.mods ? this.mods.spin : 1 };
 
     let label;
     if (q < 0.4) label = 'poor';

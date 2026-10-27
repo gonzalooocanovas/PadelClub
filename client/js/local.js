@@ -19,8 +19,8 @@ export class LocalMatch {
    * @param o.onMessage (msg) => void, receives start/snap/ev/results
    * @param o.onFinish  (results) => career info | null, called once when the match ends
    */
-  constructor({ settings, names, diffs, looks, onMessage, onFinish }) {
-    Object.assign(this, { settings, names, diffs, looks, emit: onMessage, onFinish });
+  constructor({ settings, names, diffs, looks, onMessage, onFinish, controller = null, passive = false }) {
+    Object.assign(this, { settings, names, diffs, looks, emit: onMessage, onFinish, controller, passive });
     this.paused = false;
     this.timer = null;
   }
@@ -40,6 +40,12 @@ export class LocalMatch {
   }
 
   stop() { clearInterval(this.timer); this.timer = null; }
+
+  /** A drill ended: tell the app and stop the loop. */
+  finishDrill(result) {
+    this.emit({ t: 'drillResults', result });
+    this.stop();
+  }
 
   setPaused(p) { this.paused = p; this.lastT = performance.now(); }
 
@@ -74,12 +80,14 @@ export class LocalMatch {
       inp = { ...this.lastInput, swing: false, jump: false, ...(stale ? { mx: 0, mz: 0, sprint: false } : {}) };
     }
     if (inp) g.applyInput(0, inp);
+    this.controller?.update(g, this);
     for (let s = 1; s < 4; s++) {
-      if (!g.players[s].active) continue;
+      if (!g.players[s].active || this.passive) continue; // drills: the other players stand still
       g.applyInput(s, botInput(g, s, this.mem[s], this.diffs[s] || this.settings.difficulty, dt));
     }
     g.tick(dt);
     const evs = g.drainEvents();
+    if (evs.length && this.controller) this.controller.events(evs, g, this);
     if (evs.length) {
       this.emit({ t: 'ev', ev: evs });
       const done = evs.find((e) => e.e === 'match');

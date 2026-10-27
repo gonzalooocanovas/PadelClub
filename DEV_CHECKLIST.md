@@ -34,8 +34,10 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 - ❌ Mouse wheel actions, pointer-lock cursor capture, separate per-player profiles in one browser, camera presets, power indicator, aim assist
 
 ## Career
-- 🟡 8-stage ladder with named opponents/partners, stars, XP, per-stage court and looks, progress saved in the browser
-- ❌ Seasons, calendar, tournament brackets, training drills, player attributes, objectives, narrative, versioned save migration
+- ✅ Career v2 (shared/career2.js, client/js/career-ui.js): 3 seasons and 12 events (knockout draws of 4/8, group + final), per-event court and rules, real brackets (matches you do not play are simulated headlessly with the same engine and bots), 16 named characters with playing styles, world ranking vs roster points, objectives (rewards granted once, unlock two rackets), versioned save (padel.career2) that migrates the old ladder save without deleting it
+- ✅ Training: 5 drills run on the real game (serve, forehand corner, lob, volley, smash), 3 stars each, development points only for improvement
+- ✅ Development: 9 attributes, each level a small bonus (about +1%), applied only to local matches, never online
+- 🟡 Narrative is limited to scouting notes and match commentary (no story scenes). Unit-tested logic; only played through in the in-app browser with scripted input, not by a person
 
 ## Camera
 - ✅ Presets: player, broadcast, tactical, custom (distance, height, smoothing, field of view); optional drift toward the ball; the camera never rotates with the movement keys
@@ -50,6 +52,6 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 - ✅ `render.yaml` targets Render's Frankfurt (EU) region. A service's region cannot be changed once created: recreate the service from the Blueprint.
 
 ## Tests
-- 56 automated tests: scoring, rules, physics/spin, singles, career, looks/courts, 4 real WebSocket clients.
+- 84 automated tests: scoring, rules, physics/spin, contact model, singles, career v2 (brackets, migration, rewards), drills, input, looks/courts, 4 real WebSocket clients.
 - Manually checked in the in-app browser: menu, equipment screen, the three courts (menu background), a night-arena practice match.
 - NOT checked: gamepad, audio, a real 4-human session, mobile, performance on low-end GPUs.

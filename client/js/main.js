@@ -9,7 +9,13 @@ import { DEFAULT_LOOKS, sanitizeLook } from '/shared/looks.js';
 import { LocalMatch } from './local.js';
 import { InputManager, applyScheme, rebind, resetBindings, ACTIONS } from './input.js';
 import { DEFAULT_SETTINGS } from '/shared/constants.js';
-import { CAREER, starsFor, careerViewFrom, applyCareerResult } from '/shared/career.js';
+import {
+  loadCareer as loadCareerSave, saveCareer as storeCareerSave, EVENT_BY_ID, DRILLS, createTournament, nextPlayerMatch, reportPlayerMatch,
+  simulateMatch, applyMatch, completeEvent, commentary, buyAttr, attrMods, applyDrill, claimObjectives, rankOf, RESULT_LABELS,
+} from '/shared/career2.js';
+import { ROSTER_BY_ID } from '/shared/roster.js';
+import { hubHtml, eventHtml, eventResultHtml, drillResultHtml } from './career-ui.js';
+import { DrillController } from './drills.js';
 
 const net = new Net();
 const input = new InputManager(localStorage);
@@ -28,9 +34,6 @@ let rematchVotes = [];
 let lastResults = null;
 let autoJoin = new URLSearchParams(location.search).get('room');
 let level = (() => { try { return localStorage.getItem('padel.level') || 'easy'; } catch { return 'easy'; } })();
-let careerView = null;
-let openCareerAfterLeave = false;
-let wantCareer = false; // (server career messages are no longer used: career runs locally)
 const loadLook = () => { try { return sanitizeLook(JSON.parse(localStorage.getItem('padel.look') || 'null'), 0); } catch { return { ...DEFAULT_LOOKS[0] }; } };
 let myLook = loadLook();
 let court = (() => { try { return localStorage.getItem('padel.court') || 'indoor'; } catch { return 'indoor'; } })();
@@ -40,9 +43,11 @@ let local = null; // running solo match (no network)
 let localCfg = null;
 const localProxy = { rtt: 0, send(m) { if (m.t === 'in') local?.pushInputs(m.inputs); } };
 
-// career progress lives in this browser: {done: {stageId: stars}, xp}
-const loadCareer = () => { try { return JSON.parse(localStorage.getItem('padel.career') || '{}'); } catch { return {}; } };
-const saveCareer = (c) => { try { localStorage.setItem('padel.career', JSON.stringify(c)); } catch { /* optional */ } };
+// career progress lives in this browser (versioned save, see shared/career2.js; the old ladder save is migrated, never deleted)
+const loadCareer = () => loadCareerSave(localStorage);
+const saveCareer = (c) => storeCareerSave(localStorage, c);
+let careerTab = 'hub';
+let drillRun = null; // {id} while a drill is on screen
 
 world.setQuality(settings.quality);
 world.setBallScale(settings.ballScale);
@@ -65,8 +70,9 @@ function showHome() {
   hud = null;
   world.setCourt(court);
   world.setLooks([myLook, ...DEFAULT_LOOKS.slice(1)]);
-  const cv = careerViewFrom(loadCareer().done || {});
-  ui.home({ name: net.name, profile, status: net.status, joinCode: autoJoin || '', level, court, careerStars: cv.stars ? `${cv.stars}/${cv.max}` : null });
+  const cs = loadCareer();
+  world.setZone(null);
+  ui.home({ name: net.name, profile, status: net.status, joinCode: autoJoin || '', level, court, careerStars: cs.stats.matches ? `Season ${cs.season} · rank #${rankOf(cs.points)}` : null });
 }
 
 function lobbyReason() {
@@ -110,47 +116,130 @@ function startLocalMatch(cfg) {
     ...DEFAULT_SETTINGS, mode: cfg.mode, difficulty: cfg.difficulty,
     sets: cfg.sets ?? 1, gamesPerSet: cfg.gamesPerSet ?? 4, goldenPoint: !!cfg.golden,
   };
-  const names = cfg.mode === 'singles'
-    ? [me, 'AI', cfg.opponents?.[0] || 'AI', 'AI']
-    : [me, cfg.partner || 'AI', cfg.opponents?.[0] || 'AI', cfg.opponents?.[1] || 'AI'];
-  const diffs = ['', cfg.partnerDiff || cfg.difficulty, cfg.difficulty, cfg.difficulty];
-  const staged = !!cfg.stage;
-  const looks = cfg.mode === 'singles'
-    ? [myLook, DEFAULT_LOOKS[1], staged ? cfg.looks?.[0] : DEFAULT_LOOKS[2], DEFAULT_LOOKS[3]]
-    : [myLook, staged ? cfg.looks?.[0] : DEFAULT_LOOKS[1], staged ? cfg.looks?.[1] : DEFAULT_LOOKS[2], staged ? cfg.looks?.[2] : DEFAULT_LOOKS[3]];
+  const c = cfg.custom; // career matches: named characters with their own level, style and look
+  const names = c?.names || (cfg.mode === 'singles' ? [me, 'AI', 'AI', 'AI'] : [me, 'AI', 'AI', 'AI']);
+  const diffs = c?.diffs || ['', cfg.difficulty, cfg.difficulty, cfg.difficulty];
+  const looks = c?.looks || [myLook, DEFAULT_LOOKS[1], DEFAULT_LOOKS[2], DEFAULT_LOOKS[3]];
+  if (cfg.attrMods) s.attrMods = cfg.attrMods;
   s.court = cfg.court || court;
   room = { settings: s, hostId: 'local', you: 'local', slots: [], state: 'match', code: 'LOCAL' };
   local = new LocalMatch({
     settings: s, names, diffs, looks: looks.map((l, i) => sanitizeLook(l, i)),
     onMessage: (m) => net.emit(m.t, m),
-    onFinish: (results) => (cfg.stage ? finishCareer(cfg.stage, results) : null),
+    onFinish: cfg.onFinish || (() => null),
+    controller: cfg.controller || null,
+    passive: !!cfg.passive,
   });
   local.start();
 }
 
-function startCareer(id) {
-  const stage = CAREER.find((c) => c.id === id);
-  const view = careerViewFrom(loadCareer().done || {});
-  if (!stage || !view.stages.find((c) => c.id === id)?.unlocked) { toast('That stage is locked', true); return; }
-  startLocalMatch({ ...stage, stage });
-}
+// ---------------------------------------------------------------- career v2
 
-function finishCareer(stage, results) {
-  const st = loadCareer();
-  const stars = starsFor(results);
-  const r = applyCareerResult(st.done || {}, stage.id, stars);
-  st.done = r.done;
-  st.xp = (st.xp || 0) + r.bonusXp;
-  saveCareer(st);
-  return { stage: stage.id, name: stage.name, won: stars > 0, stars, bonusXp: r.bonusXp, unlocked: r.unlocked, hasNext: stage.id < CAREER.length };
-}
-
-function showCareer() {
+function showCareer(tab) {
   stopLocal();
   if (match) { match.stop(); match = null; }
-  careerView = careerViewFrom(loadCareer().done || {});
+  if (tab) careerTab = tab;
+  hud = null;
+  world.setZone(null);
+  world.setSingles(false);
   screen = 'career';
-  ui.career(careerView);
+  const save = loadCareer();
+  ui.root.innerHTML = save.active && careerTab === 'event' ? eventHtml(save) : hubHtml(save, careerTab === 'event' ? 'hub' : careerTab);
+}
+
+function enterEvent(id) {
+  const save = loadCareer();
+  const ev = EVENT_BY_ID[id];
+  if (!ev) return;
+  if (save.active && save.active.eventId !== id) { toast('Finish or withdraw from your current event first', true); return; }
+  if (!save.active) {
+    const locked = (ev.requires?.points && save.points < ev.requires.points) || (ev.season > save.season);
+    if (locked) { toast('That event is still locked', true); return; }
+    save.active = createTournament(ev, save.seed++);
+    saveCareer(save);
+  }
+  showCareer('event');
+}
+
+function playEventMatch() {
+  const save = loadCareer();
+  const t = save.active;
+  if (!t) return showCareer('hub');
+  const ev = EVENT_BY_ID[t.eventId];
+  const n = nextPlayerMatch(t);
+  if (!n) return showCareer('hub');
+  const me = (net.name || 'You').slice(0, 16);
+  const mates = ev.mode === 'doubles' ? [t.teams[0].ids[1]] : [];
+  const roster = (id) => ROSTER_BY_ID[id];
+  const opp = n.opponents.map(roster);
+  const mate = mates.map(roster);
+  const names = ev.mode === 'singles' ? [me, 'AI', opp[0].name, 'AI'] : [me, mate[0].name, opp[0].name, opp[1].name];
+  const lv = (c) => ({ level: c.level, style: c.style });
+  const diffs = ev.mode === 'singles' ? ['', 'easy', lv(opp[0]), 'easy'] : ['', lv(mate[0]), lv(opp[0]), lv(opp[1])];
+  const looks = ev.mode === 'singles' ? [myLook, DEFAULT_LOOKS[1], opp[0].look, DEFAULT_LOOKS[3]] : [myLook, mate[0].look, opp[0].look, opp[1].look];
+  const myPts = save.points;
+  startLocalMatch({
+    mode: ev.mode, difficulty: 'normal', sets: ev.sets, gamesPerSet: ev.gamesPerSet, golden: ev.golden, court: ev.court,
+    attrMods: attrMods(save.attrs),
+    custom: { names, diffs, looks },
+    onFinish: (results) => finishEventMatch(ev, n, opp, myPts, results),
+  });
+}
+
+function finishEventMatch(ev, n, opp, myPts, results) {
+  const save = loadCareer();
+  const t = save.active;
+  if (!t) return null;
+  let gf = 0, ga = 0;
+  for (const [a, b] of results.score.sets) { gf += a; ga += b; }
+  const won = results.winner === 0;
+  const upset = won && opp.some((o) => o.points > myPts);
+  const me = results.players[0] || {};
+  const applied = applyMatch(save, ev, n.name, won, {
+    gamesFor: gf, gamesAgainst: ga, opp: opp.map((o) => o.name).join(' & '), upset, smashes: me.smashes, aces: me.aces, at: Date.now(),
+  });
+  const seed = save.seed++;
+  let k = 0;
+  reportPlayerMatch(t, won, gf, ga, (a, b) => simulateMatch(a, b, ev, seed * 31 + k++));
+  const info = { event: ev.name, round: n.name, commentary: commentary(won, gf, ga, opp[0]?.note), objectives: [], next: '' };
+  let finished = null;
+  if (t.status === 'done') {
+    finished = completeEvent(save, ev, t.result);
+    info.finished = { ...finished, result: t.result };
+    info.summary = t.result === 'champion' ? `${ev.name} is yours.` : `You finished as ${RESULT_LABELS[t.result].toLowerCase()}.`;
+  } else {
+    const nx = nextPlayerMatch(t);
+    info.next = nx ? `${nx.name} against ${nx.opponents.map((id) => ROSTER_BY_ID[id].name).join(' & ')}` : '';
+  }
+  info.objectives = claimObjectives(save);
+  saveCareer(save);
+  return { kind: 'event', won, over: !!finished, html: eventResultHtml(info) };
+}
+
+function startDrill(id) {
+  const save = loadCareer();
+  const drill = DRILLS.find((d) => d.id === id);
+  if (!drill) return;
+  drillRun = { id };
+  startLocalMatch({
+    mode: 'singles', difficulty: 'easy', sets: 1, gamesPerSet: 6, court: court === 'outdoor' ? 'outdoor' : 'indoor',
+    attrMods: attrMods(save.attrs), passive: true, controller: new DrillController(id),
+  });
+}
+
+function onDrillResults(m) {
+  const { id, score, attempts } = m.result;
+  const drill = DRILLS.find((d) => d.id === id);
+  const save = loadCareer();
+  const r = applyDrill(save, drill, score);
+  const gained = claimObjectives(save);
+  saveCareer(save);
+  stopLocal();
+  if (match) { match.stop(); match = null; }
+  hud = null;
+  world.setZone(null);
+  screen = 'results';
+  ui.root.innerHTML = `<div class="screen"><div class="panel modal" style="width:min(520px,100%)">${drillResultHtml(drill, score, attempts, r)}${gained.map((o) => `<div class="obj done"><span>✓</span><span class="grow">Objective complete: ${o.text}</span></div>`).join('')}</div></div>`;
 }
 
 // ---------------------------------------------------------------- controls screen
@@ -188,7 +277,7 @@ function act(name, d, el) {
       break;
     case 'court': court = d.val; try { localStorage.setItem('padel.court', court); } catch { /* optional */ } showHome(); break;
     case 'equipment': {
-      const canvas = ui.equipmentModal(myLook);
+      const canvas = ui.equipmentModal(myLook, loadCareer().unlockedRackets);
       preview?.dispose();
       preview = new Preview(canvas);
       preview.setCharacter(myLook, previewTeam);
@@ -226,9 +315,30 @@ function act(name, d, el) {
       break;
     }
     case 'career': showCareer(); break;
-    case 'careerPlay': startCareer(+d.stage); break;
-    case 'careerNext': startCareer((lastResults?.career?.stage || 0) + 1); break;
-    case 'careerMenu': showCareer(); break;
+    case 'careerTab': showCareer(d.val); break;
+    case 'eventEnter': enterEvent(d.event); break;
+    case 'eventPlay': playEventMatch(); break;
+    case 'eventContinue': case 'careerMenu': {
+      const s = loadCareer();
+      showCareer(s.active ? 'event' : 'hub');
+      break;
+    }
+    case 'eventAbandon': {
+      const s = loadCareer();
+      s.active = null;
+      saveCareer(s);
+      toast('You withdrew from the event');
+      showCareer('calendar');
+      break;
+    }
+    case 'drillStart': startDrill(d.drill); break;
+    case 'attrBuy': {
+      const s = loadCareer();
+      const r = buyAttr(s, d.attr);
+      if (!r.ok) toast(r.reason, true); else { claimObjectives(s); saveCareer(s); }
+      showCareer('development');
+      break;
+    }
     case 'careerBack': showHome(); break;
     case 'rooms': ui.roomsModal(null); net.send({ t: 'rooms' }); break;
     case 'joinRoom': ui.closeModal(); net.send({ t: 'join', code: d.code, name: myName() }); break;
@@ -268,9 +378,10 @@ function act(name, d, el) {
       break;
     }
     case 'rematch': if (local) startLocalMatch(localCfg); else net.send({ t: 'rematch' }); break;
+    case 'leaveLocal': stopLocal(); room = null; showHome(); break;
     case 'tolobby': net.send({ t: 'lobby' }); break;
     case 'profile': {
-      const bonus = loadCareer().xp || 0;
+      const bonus = loadCareer().xp;
       const merged = profile ? { ...profile, xp: profile.xp + bonus, level: Math.floor(Math.sqrt((profile.xp + bonus) / 100)) + 1 } : null;
       ui.profileModal(merged, net.name);
       break;
@@ -322,18 +433,10 @@ net.on('error', (m) => {
 });
 net.on('left', () => {
   room = null; practicePending = false; selected = null;
-  if (openCareerAfterLeave) { openCareerAfterLeave = false; wantCareer = true; net.send({ t: 'career' }); return; }
   showHome();
 });
-net.on('career', (m) => {
-  careerView = m.career;
-  if (!wantCareer) { if (screen === 'home' && document.activeElement?.id !== 'nameInput') showHome(); return; }
-  wantCareer = false;
-  if (screen === 'game') return;
-  if (match) { match.stop(); match = null; }
-  screen = 'career';
-  ui.career(m.career);
-});
+net.on('drillStatus', (m) => { hud?.setDrill(m.text); world.setZone(m.zone || null); });
+net.on('drillResults', onDrillResults);
 net.on('rooms', (m) => { if (document.getElementById('modal')) ui.roomsModal(m.rooms); });
 
 net.on('room', (m) => {

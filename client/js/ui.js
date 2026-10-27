@@ -63,7 +63,7 @@ export class UI {
         </div>
         <div class="menu">
           <button class="btn primary" data-act="create" ${status !== 'online' ? 'disabled' : ''}>Play with friends <small>create private room</small></button>
-          <button class="btn" data-act="career" ${status !== 'online' ? 'disabled' : ''}>Career <small>${careerStars ? '★ ' + careerStars : 'climb the ladder'}</small></button>
+          <button class="btn" data-act="career">Career <small>${careerStars || 'seasons, rankings, training'}</small></button>
           <button class="btn" data-act="equipment">Equipment <small>player &amp; racket</small></button>
           <div class="row levelrow"><span class="label">Court</span><div class="seg grow">${COURT_IDS.map((c) => `<button data-act="court" data-val="${c}" class="${court === c ? 'on' : ''}">${COURT_SHORT[c]}</button>`).join('')}</div></div>
           <div class="row levelrow"><span class="label">Bots</span><div class="seg grow">${BOT_LEVELS.map((l) => `<button data-act="level" data-val="${l}" class="${level === l ? 'on' : ''}">${BOT_LABELS[l]}</button>`).join('')}</div></div>
@@ -175,6 +175,7 @@ export class UI {
       <div class="hud">
         <div class="score" id="score"></div>
         <div class="topright"><span id="clock">0:00</span><span class="status"><span class="dot" id="pingDot"></span><span id="ping">– ms</span></span></div>
+        <div class="drillbar hidden" id="drillbar"></div>
         <div class="banner" id="banner"><div class="big"></div><div class="sub"></div></div>
         <div class="feedback" id="feedback"></div>
         <div class="timing hidden" id="timing"><i class="t-out"></i><i class="t-in"></i><span></span></div>
@@ -258,6 +259,7 @@ export class UI {
         t.querySelector('.t-out').style.width = t.querySelector('.t-out').style.height = `${outPx * 2}px`;
         t.querySelector('span').textContent = text;
       },
+      setDrill(text) { const d = $('#drillbar'); if (!d) return; d.classList.toggle('hidden', !text); d.textContent = text || ''; },
       connection(ok) { $('#recon')?.classList.toggle('hidden', ok); },
     };
     void ui; void settingsMatch;
@@ -286,14 +288,10 @@ export class UI {
           ${my ? `<div><div class="label">XP earned</div>+${my.xp} · Level ${my.level}</div>` : ''}
         </div>
         ${statsTable(r.players, names, room?.settings?.mode === 'singles')}
-        ${m.career ? `<div class="panel" style="margin-top:14px;background:var(--panel-2)">
-          <div class="label">Career · ${esc(m.career.name)}</div>
-          <div style="font-size:30px;letter-spacing:.2em;color:var(--accent)">${'★'.repeat(m.career.stars)}<span class="mute">${'★'.repeat(3 - m.career.stars)}</span></div>
-          <p class="mute" style="margin-top:6px">${m.career.won ? (m.career.bonusXp ? '+' + m.career.bonusXp + ' bonus XP. ' : 'Already beaten with these stars. ') + (m.career.unlocked ? 'Next stage unlocked!' : '') : 'You lost this one. Try again to unlock the next stage.'}</p></div>` : ''}
+        ${m.career ? m.career.html : ''}
         <div class="row" style="margin-top:18px">
-          ${m.career ? `${m.career.won && m.career.hasNext ? '<button class="btn primary grow" data-act="careerNext">Next stage</button>' : ''}
-          <button class="btn ${m.career.won && m.career.hasNext ? '' : 'primary'} grow" data-act="rematch">Retry</button>
-          <button class="btn ghost" data-act="careerMenu">Career menu</button>` : `
+          ${m.career ? `<button class="btn primary grow" data-act="eventContinue">${m.career.over ? 'Back to career' : 'Continue'}</button>
+          <button class="btn ghost" data-act="leaveLocal">Main menu</button>` : `
           <button class="btn primary grow" data-act="rematch">Rematch ${rematchVotes.length ? `(${rematchVotes.length} ready)` : ''}</button>
           ${isHost ? '<button class="btn grow" data-act="tolobby">Back to lobby</button>' : ''}
           <button class="btn ghost" data-act="leave">Leave</button>`}
@@ -302,23 +300,6 @@ export class UI {
   }
 
   // ------------------------------------------------------------------ modals
-
-  career(view) {
-    const tiers = [...new Set(view.stages.map((s) => s.tier))];
-    const card = (s) => `<div class="stage ${s.unlocked ? '' : 'locked'}">
-      <div class="row"><span class="label">Stage ${s.id}</span><span class="grow"></span><span class="stars">${'★'.repeat(s.stars)}<i>${'★'.repeat(3 - s.stars)}</i></span></div>
-      <h3>${esc(s.name)}</h3>
-      <p class="mute">${esc(s.desc)}</p>
-      <div class="row" style="flex-wrap:wrap;gap:6px"><span class="tag">${s.mode === 'singles' ? '1 vs 1' : '2 vs 2'}</span><span class="tag">${BOT_LABELS[s.difficulty]}</span><span class="tag">${s.sets === 1 ? '1 set' : 'best of ' + s.sets} · ${s.gamesPerSet} games${s.golden ? ' · golden' : ''}</span></div>
-      <p style="font-size:13px">vs ${s.opponents.map(esc).join(' & ')}${s.partner ? ' <span class="mute">· partner ' + esc(s.partner) + '</span>' : ''}</p>
-      <button class="btn ${s.unlocked ? 'primary' : ''}" data-act="careerPlay" data-stage="${s.id}" ${s.unlocked ? '' : 'disabled'}>${s.unlocked ? (s.stars ? 'Play again' : 'Play') : 'Locked'}</button>
-    </div>`;
-    this.root.innerHTML = `<div class="screen"><div class="panel career">
-      <div class="row"><h2 style="margin:0">Career</h2><span class="grow"></span><span class="stars">★ ${view.stars} / ${view.max}</span><button class="btn ghost" data-act="careerBack">Back</button></div>
-      <p class="mute" style="margin:6px 0 14px">Beat each stage to unlock the next. Concede fewer games to earn more stars and bonus XP.</p>
-      ${tiers.map((t) => `<div class="label" style="margin:14px 0 8px">${esc(t)}</div><div class="stagegrid">${view.stages.filter((s) => s.tier === t).map(card).join('')}</div>`).join('')}
-    </div></div>`;
-  }
 
   roomsModal(list) {
     const rows = list === null ? '<p class="mute">Loading…</p>' : list.length === 0
@@ -342,11 +323,11 @@ export class UI {
   closeModal() { $('#modal')?.remove(); this.modal = null; this.onModalClose?.(); this.onModalClose = null; }
 
   /** Player + racket customisation with a live 3D preview. Returns the preview canvas. */
-  equipmentModal(look) {
+  equipmentModal(look, unlocked = null) {
     const arch = ARCHETYPES.map((a) => `<button class="opt" data-act="lookArch" data-val="${a.id}"><b>${esc(a.name)}</b><span class="mute">${esc(a.blurb)}</span></button>`).join('');
     const hair = HAIR_STYLES.map((h, i) => `<button data-act="lookHair" data-val="${i}">${esc(h)}</button>`).join('');
     const skin = SKIN_TONES.map((c, i) => `<button class="swatch-btn" data-act="lookSkin" data-val="${i}" style="background:#${c.toString(16).padStart(6, '0')}" aria-label="Skin tone ${i + 1}"></button>`).join('');
-    const rk = RACKETS.map((r) => `<button class="opt racket" data-act="lookRacket" data-val="${r.id}"><i style="background:#${r.face.toString(16).padStart(6, '0')};border-color:#${r.accent.toString(16).padStart(6, '0')}"></i><span><b>${esc(r.name)}</b> <span class="mute">${esc(r.category)}</span><br><span class="mute">${esc(r.note)}</span></span></button>`).join('');
+    const rk = RACKETS.map((r) => `<button class="opt racket" data-act="lookRacket" data-val="${r.id}" ${!unlocked || unlocked.includes(r.id) ? '' : 'disabled title="Unlock it in Career objectives"'}><i style="background:#${r.face.toString(16).padStart(6, '0')};border-color:#${r.accent.toString(16).padStart(6, '0')}"></i><span><b>${esc(r.name)}</b> <span class="mute">${esc(r.category)}</span><br><span class="mute">${esc(r.note)}</span></span></button>`).join('');
     const el = this.openModal(`<h2>Equipment</h2><div class="equip">
       <div class="equip-view"><canvas id="previewCanvas" width="320" height="380"></canvas>
         <div class="row" style="flex-wrap:wrap"><button class="btn small" data-act="previewMode" data-val="character">Player</button><button class="btn small" data-act="previewMode" data-val="racket">Inspect racket</button><button class="btn small ghost" data-act="previewTeam">Team colour</button></div></div>

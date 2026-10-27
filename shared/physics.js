@@ -16,7 +16,7 @@ export function stepPlayer(p, inp, dt, limit, mul = 1) {
   if (len > 1) { mx /= len; mz /= len; }
   const moving = len > 0.05;
   const sprinting = !!inp.sprint && moving && p.stamina > 4 && mul >= 1;
-  const max = (sprinting ? PLAYER.SPRINT : PLAYER.RUN) * mul;
+  const max = (sprinting ? PLAYER.SPRINT : PLAYER.RUN) * mul * (p.speedMul || 1); // speedMul: career development, local matches only
   const tvx = mx * max;
   const tvz = mz * max;
   const dvx = tvx - p.vx;
@@ -34,7 +34,7 @@ export function stepPlayer(p, inp, dt, limit, mul = 1) {
   p.x += p.vx * dt;
   p.z += p.vz * dt;
   if (sprinting) p.stamina = Math.max(0, p.stamina - PLAYER.SPRINT_COST * dt);
-  else p.stamina = Math.min(PLAYER.STAMINA_MAX, p.stamina + PLAYER.STAMINA_REGEN * dt);
+  else p.stamina = Math.min(PLAYER.STAMINA_MAX, p.stamina + PLAYER.STAMINA_REGEN * (p.regenMul || 1) * dt);
 
   const xl = p.xLim || PLAYER.MAX_X;
   p.x = clamp(p.x, -xl, xl);

@@ -195,3 +195,25 @@ kbd { background: #0d141e; border: 1px solid var(--line); border-bottom-width: 2
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { padding: 4px 10px; border: 1px solid var(--line); border-radius: 12px; font-size: 12px; color: var(--mute); }
 .chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+.drillbar { position: absolute; top: 74px; left: 50%; transform: translateX(-50%); background: rgba(10,15,22,.85); border: 1px solid var(--accent); border-radius: 6px; padding: 8px 14px; font-size: 13px; letter-spacing: .04em; max-width: 90vw; text-align: center; }
+
+/* career v2 */
+.statrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-top: 10px; }
+.statrow > div { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; display: flex; flex-direction: column; }
+.statrow b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.obj { display: flex; gap: 10px; align-items: center; padding: 7px 10px; border: 1px solid var(--line); border-radius: 4px; margin-bottom: 4px; font-size: 13px; background: var(--panel-2); }
+.obj.done { border-color: #2f6a47; color: #8ff0b0; }
+.attr { display: flex; align-items: center; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.attrname { width: 210px; font-size: 14px; }
+.pips { display: flex; gap: 3px; flex: 1; }
+.pips i { flex: 1; height: 8px; border-radius: 2px; background: var(--line); max-width: 28px; }
+.pips i.on { background: var(--accent); }
+.bracket { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 6px; }
+.bround { min-width: 200px; display: flex; flex-direction: column; gap: 8px; justify-content: space-around; }
+.bmatch { border: 1px solid var(--line); border-radius: 4px; background: var(--panel-2); padding: 6px 8px; font-size: 13px; }
+.bmatch .you { color: var(--accent); font-weight: 700; }
+.bmatch .win { font-weight: 700; } .bmatch .lose { opacity: .5; }
+.bmatch.tbd { color: var(--mute); font-style: italic; }
+.scout { margin: 6px 0; font-size: 13px; line-height: 1.5; }
+.opt:disabled { opacity: .4; cursor: not-allowed; }

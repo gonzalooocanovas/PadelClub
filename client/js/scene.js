@@ -328,6 +328,16 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
     this.singlesGlass.visible = on;
   }
 
+  /** Draw (or clear) a translucent target rectangle on the opponents' half, for training drills. */
+  setZone(z) {
+    if (!this.zoneMesh) {
+      this.zoneMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: 0xd4f23c, transparent: true, opacity: 0.28, depthWrite: false }));
+      this.zoneMesh.rotation.x = -Math.PI / 2; this.zoneMesh.position.y = 0.025; this.scene.add(this.zoneMesh);
+    }
+    this.zoneMesh.visible = !!z;
+    if (z) { this.zoneMesh.scale.set(z.x1 - z.x0, z.z1 - z.z0, 1); this.zoneMesh.position.set((z.x0 + z.x1) / 2, 0.025, (z.z0 + z.z1) / 2); }
+  }
+
   setBallScale(k) { this.ball.scale.setScalar(k); this.ballShadow.scale.setScalar(k * 0.7); this.ballHalo.scale.setScalar(k * 0.7); }
 
   // ------------------------------------------------------------------ players

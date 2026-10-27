@@ -22,7 +22,7 @@ Requires Node 20+. No build step: the client is plain ES modules served by the s
 
 **1 vs 1**: in the lobby set *Mode* to *1 vs 1* (host). Two seats on a narrower 7 m court closed by glass walls on all sides (the ball plays off the glass like in doubles); bots fill the free seat.
 
-**Career**: eight stages from the club courts to the Legends final (singles and doubles with named bot opponents and partners). Beating a stage unlocks the next; conceding fewer games earns up to 3 stars and bonus XP. Progress is saved to your guest profile.
+**Career**: three seasons of tournaments (knockout draws and group stages, singles and doubles) against 16 named characters with their own playing styles. The matches you do not play are simulated with the same engine, so brackets and the world ranking are real. Earn ranking points, coins and development points; complete objectives to unlock rackets; use the Training tab for drills and the Development tab to improve nine attributes (small bonuses, solo only). Progress is saved in your browser.
 
 **Bot levels**: Rookie, Club, Pro, Legend (pick them on the home screen, in the lobby, or via the career stage). Higher levels react faster, cover more ground, aim for open space and the lines, and mix globos, dejadas, slices and spin serves.
 
