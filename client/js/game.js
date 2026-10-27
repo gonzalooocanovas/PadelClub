@@ -31,8 +31,12 @@ export function cameraConfig(s) {
 const QUICK = ['Nice shot!', 'Mine!', 'Yours!', 'Switch!'];
 
 export class MatchClient {
-  constructor({ net, world, hud, sound, start, onPause, input }) {
+  constructor({ net, world, hud, sound, start, onPause, onReplay, input }) {
     this.input = input;
+    this.onReplay = onReplay; // (on) => void: lets the app freeze a solo match while a replay plays
+    this.local = !!start.local && !start.drill; // no replays in training drills
+    this.rec = []; // recent rendered frames, for instant replays
+    this.replay = null;
     this.net = net; this.world = world; this.hud = hud; this.sound = sound; this.onPause = onPause;
     this.interp = start.local ? 0.03 : 0.07; // render delay: tiny for local matches, a few snapshots online
     this.slot = start.slot;
@@ -84,7 +88,8 @@ export class MatchClient {
       i.on('hit', hit(false, 0)), i.on('lob', hit(true, 0)),
       i.on('slice', hit(false, 3)), i.on('soft', hit(false, 1)), i.on('control', hit(false, 2)),
       i.on('jump', () => { if (!this.paused) this.want.jump = true; }),
-      i.on('pause', () => this.onPause?.()),
+      i.on('pause', () => { if (this.replay) this.endReplay(); else this.onPause?.(); }),
+      i.on('hit', () => { if (this.replay) this.endReplay(); }),
       i.on('stats', () => this.hud.showStats(true)),
       i.on('statsUp', () => this.hud.showStats(false)),
       i.on('chat', (n) => this.net.send({ t: 'chat', text: QUICK[n] })),
@@ -101,6 +106,7 @@ export class MatchClient {
 
   stop() {
     this.stopped = true;
+    this.replay = null;
     this.unsubs?.forEach((u) => u());
     document.removeEventListener('visibilitychange', this.onVis);
     this.sound.stopAmbience();
@@ -122,6 +128,70 @@ export class MatchClient {
    *  stick  : the right stick places the shot
    *  steer  : the direction you hold as you hit (keyboard, or the left stick): left/right = that side, forward = deep, back = short
    */
+  // ------------------------------------------------------------------ instant replay
+
+  record(now, view) {
+    const mine = this.me;
+    this.rec.push({
+      t: now, ball: { ...view.ball },
+      players: view.players.map((v, k) => (k === this.slot ? { ...v, x: mine.x, z: mine.z, vx: mine.vx, vz: mine.vz, swingT: this.swingLocal ? this.swingLocal.t : v.swingT, kindName: this.swingLocal ? this.swingLocal.kind : v.kindName } : { ...v })),
+    });
+    while (this.rec.length && now - this.rec[0].t > 7000) this.rec.shift();
+  }
+
+  /** Called a moment after a point: replay the last seconds in slow motion from a side camera. */
+  startReplay() {
+    if (this.stopped || this.replay || !this.local || !settings.replays || this.rec.length < 60) return;
+    const end = this.rec[this.rec.length - 1].t;
+    const frames = this.rec.filter((f) => f.t >= end - 4500);
+    if (frames.length < 40) return;
+    this.replay = { frames, t: 0, dur: frames[frames.length - 1].t - frames[0].t, side: Math.random() < 0.5 ? -1 : 1 };
+    this.onReplay?.(true);
+    document.querySelector('.hud')?.classList.add('replaying');
+    this.hud.banner('Replay', 'Space or Esc to skip', 0);
+    this.world.setZone?.(null);
+  }
+
+  playReplay(dt) {
+    const R = this.replay, w = this.world;
+    R.t += dt * 1000 * 0.55; // slow motion
+    if (R.t >= R.dur) { this.endReplay(); return; }
+    const t0 = R.frames[0].t + R.t;
+    let i = 0;
+    while (i < R.frames.length - 1 && R.frames[i + 1].t <= t0) i++;
+    const a = R.frames[i], b = R.frames[Math.min(i + 1, R.frames.length - 1)];
+    const f = b.t > a.t ? clamp((t0 - a.t) / (b.t - a.t), 0, 1) : 0;
+    const L = (p, q) => p + (q - p) * f;
+    const ball = { x: L(a.ball.x, b.ball.x), y: L(a.ball.y, b.ball.y), z: L(a.ball.z, b.ball.z) };
+    w.setBall(ball.x, ball.y, ball.z);
+    w.ballVel = { x: a.ball.vx, y: a.ball.vy, z: a.ball.vz };
+    const sp = Math.hypot(a.ball.vx, a.ball.vz);
+    w.animateBall(dt * 0.55, Math.hypot(sp, a.ball.vy), sp > 0.1 ? a.ball.vx / sp : 0, sp > 0.1 ? a.ball.vz / sp : 1, a.ball.sb);
+    a.players.forEach((pa, k) => {
+      const pb = b.players[k];
+      w.updatePlayer(k, { ...pa, x: L(pa.x, pb.x), z: L(pa.z, pb.z), serving: false }, dt * 0.55, false);
+    });
+    const cam = w.camera;
+    // high television camera behind one end, drifting with the ball
+    const tx = clamp(ball.x * 0.35, -3, 3), tz = R.side * 15.5;
+    cam.position.x += (tx - cam.position.x) * Math.min(1, dt * 2);
+    cam.position.y += (6.4 - cam.position.y) * Math.min(1, dt * 2);
+    cam.position.z += (tz - cam.position.z) * Math.min(1, dt * 2);
+    cam.lookAt(ball.x * 0.5, 0.9, ball.z * 0.8);
+    w.reticle.visible = w.reticleDot.visible = false;
+    w.reachRing.visible = false;
+    this.hud.timing(null);
+  }
+
+  endReplay() {
+    if (!this.replay) return;
+    this.replay = null;
+    this.hud.banner('', '', 1);
+    document.querySelector('.hud')?.classList.remove('replaying');
+    this.camPos = null; // the match camera takes over again from where it is
+    this.onReplay?.(false);
+  }
+
   updateAim(dt) {
     const os = this.os;
     const inp = this.input;
@@ -272,6 +342,7 @@ export class MatchClient {
           this.hud.setScore(e.score, this.names);
           this.hud.setStats(e.st, e.lr);
           if (e.winner === this.team) this.world.cheerCrowd();
+          if (this.local && !e.marks.some((m) => m.type === 'match')) setTimeout(() => this.startReplay(), 1300);
           setTimeout(() => {
             if (this.stopped) return;
             for (let s = 0; s < 4; s++) if (this.world.players[s].root.visible) this.world.emote(s, (s >> 1) === e.winner ? 'win' : 'lose');
@@ -331,6 +402,7 @@ export class MatchClient {
   frame(dt, now) {
     if (this.stopped) return;
     dt = Math.min(dt, 0.1);
+    if (this.replay) { this.playReplay(dt); return; }
     this.updateAim(dt);
 
     // fixed-step local input + prediction
@@ -367,6 +439,7 @@ export class MatchClient {
         }
       });
       if (this.swingLocal) { this.swingLocal.t += dt; if (this.swingLocal.t > 0.42) this.swingLocal = null; }
+      if (this.local && settings.replays) this.record(now, view);
     }
 
     // reticle + reach ring (timing aid)
@@ -403,6 +476,7 @@ export class MatchClient {
    */
   updateTimingRing() {
     const b = this.ballView;
+    if (this.phase === 'serve' && this.slot === this.serverSlot && settings.timing) { this.updateServeRing(b); return; }
     const mine = this.lastTeam !== this.team && this.phase === 'rally';
     const dx = this.me.x - b.x, dz = this.me.z - b.z;
     const d = Math.hypot(dx, dz);
@@ -423,6 +497,19 @@ export class MatchClient {
     else if (off < 0) { zone = 'good'; text = 'BIEN'; }
     else if (off <= 0.22) { zone = 'good'; text = 'BIEN'; }
     this.hud.timing(x, y, Math.max(outer, inner * 0.8), zone, text);
+  }
+
+  /** Serve timing: the ring closes when the bounced ball is at waist height (the racket meets it ~0.05 s after the press). */
+  updateServeRing(b) {
+    const now = performance.now();
+    const vy = this._sy !== undefined && now > this._st ? (b.y - this._sy) / ((now - this._st) / 1000) : 0;
+    this._sy = b.y; this._st = now;
+    const err = Math.abs(b.y + clamp(vy, -5, 5) * 0.05 - 0.62);
+    const v = new THREE.Vector3(b.x, b.y, b.z).project(this.world.camera);
+    const x = (v.x * 0.5 + 0.5) * innerWidth, y = (-v.y * 0.5 + 0.5) * innerHeight;
+    const inner = 26;
+    const zone = err <= 0.07 ? 'perfect' : err <= 0.17 ? 'good' : 'far';
+    this.hud.timing(x, y, inner + Math.min(err, 0.5) * 220, zone, zone === 'perfect' ? 'PERFECTO' : zone === 'good' ? 'BIEN' : '');
   }
 
   updateCamera(dt) {

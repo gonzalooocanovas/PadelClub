@@ -5,7 +5,7 @@
 //   easy = Rookie   normal = Club   hard = Pro   expert = Legend
 
 import { clamp, COURT } from './constants.js';
-import { predictBall } from './physics.js';
+import { predictBall, serveBallHeight } from './physics.js';
 import { STYLE_MODS } from './roster.js';
 
 export const BOT_LEVELS = ['easy', 'normal', 'hard', 'expert'];
@@ -15,10 +15,10 @@ const SKILL = {
   // speed: top speed factor · react: seconds before reacting · noise: aim scatter · reach: swing distance
   // flub: chance to miss a ball outright · aggr: willingness to attack · lob/slice/smash: shot mix
   // serveSpin: chance of a spin serve · serveTiming: waits for the ideal bounce height · plan: replanning interval
-  easy: { speed: 0.9, sprint: true, react: 0.3, noise: 2.0, reach: 1.9, flub: 0.24, timingErr: 0.24, aggr: 0.12, lob: 0.35, slice: 0.08, smash: 0.35, serveSpin: 0, serveTiming: false, serveRisk: 0.0, plan: 0.12 },
-  normal: { speed: 0.96, sprint: true, react: 0.18, noise: 1.1, reach: 2.0, flub: 0.14, timingErr: 0.14, aggr: 0.3, lob: 0.45, slice: 0.18, smash: 0.5, serveSpin: 0.15, serveTiming: false, serveRisk: 0.3, plan: 0.1 },
-  hard: { speed: 1.0, sprint: true, react: 0.09, noise: 0.5, reach: 2.15, flub: 0.07, timingErr: 0.07, aggr: 0.5, lob: 0.5, slice: 0.25, smash: 0.7, serveSpin: 0.4, serveTiming: true, serveRisk: 0.6, plan: 0.07 },
-  expert: { speed: 1.04, sprint: true, react: 0.04, noise: 0.2, reach: 2.3, flub: 0.03, timingErr: 0.03, aggr: 0.75, lob: 0.55, slice: 0.3, smash: 0.85, serveSpin: 0.6, serveTiming: true, serveRisk: 0.85, plan: 0.05 },
+  easy: { speed: 0.9, sprint: true, react: 0.3, noise: 2.0, reach: 1.9, flub: 0.24, timingErr: 0.24, aggr: 0.12, lob: 0.35, slice: 0.08, smash: 0.35, serveSpin: 0, serveTiming: false, serveWindow: 0.45, serveRisk: 0.0, plan: 0.12 },
+  normal: { speed: 0.96, sprint: true, react: 0.18, noise: 1.1, reach: 2.0, flub: 0.14, timingErr: 0.14, aggr: 0.3, lob: 0.45, slice: 0.18, smash: 0.5, serveSpin: 0.15, serveTiming: false, serveWindow: 0.25, serveRisk: 0.3, plan: 0.1 },
+  hard: { speed: 1.0, sprint: true, react: 0.09, noise: 0.55, reach: 2.15, flub: 0.1, timingErr: 0.07, aggr: 0.5, lob: 0.5, slice: 0.25, smash: 0.7, serveSpin: 0.4, serveTiming: true, serveWindow: 0.12, serveRisk: 0.6, plan: 0.07 },
+  expert: { speed: 1.04, sprint: true, react: 0.04, noise: 0.25, reach: 2.3, flub: 0.04, timingErr: 0.03, aggr: 0.75, lob: 0.55, slice: 0.3, smash: 0.85, serveSpin: 0.6, serveTiming: true, serveWindow: 0.05, serveRisk: 0.85, plan: 0.05 },
 };
 
 const skillCache = new Map();
@@ -80,7 +80,7 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
   const incoming = r.lastTeam !== p.team;
   if (r.lastTeam !== mem.lastTeam) {
     mem.lastTeam = r.lastTeam; mem.planAge = 99;
-    mem.react = r.serving ? 0.05 : skill.react;
+    mem.react = r.serving ? skill.react * 0.6 : skill.react; // receivers do not anticipate: they react to the serve, not before it
     mem.flub = rnd() < skill.flub * (r.serving ? 0.35 : 1);
     mem.jit = (rnd() - 0.5) * skill.timingErr; // each level presses a little earlier or later
   }
@@ -102,6 +102,8 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
         if (s.floor) bounced = true;
         const mine = p.team === 0 ? s.z < -0.4 : s.z > 0.4;
         // groundstrokes after the bounce; volleys only in the net zone
+        // overhead: a high ball falling in my half before it bounces is attacked (smash / bandeja) by players who dare
+        if (mine && !bounced && s.vy < 0 && s.y < 2.45 && s.y > 1.95 && Math.abs(s.z) < 7 && rnd() < 0.25 + skill.smash * 0.75) { pick = s; break; }
         if (mine && s.y < 1.7 && s.vy <= 0.5 && (bounced || Math.abs(s.z) < 4.2)) { pick = s; break; }
       }
       mem.plan = pick || null;
@@ -115,7 +117,7 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
       responsible = me < pa - 0.3 || (Math.abs(me - pa) <= 0.3 && slot < partner.slot);
     }
     if (plan && responsible) {
-      if (mem.react <= 0) moveTo(inp, p, plan.x, plan.z - os * 0.75, skill, true);
+      if (mem.react <= 0) moveTo(inp, p, plan.x, plan.z - os * (plan.y > 1.8 ? 0.3 : 0.75), skill, true);
     } else {
       formation(inp, game, p, os, skill);
     }
@@ -164,7 +166,11 @@ function serve(inp, game, p, os, skill, mem, dt) {
   mem.serveT += dt;
   if (mem.serveT < 1.1 + skill.react * 2 || game.serveWait > 0) return;
   const y = game.ball.y;
-  if (skill.serveTiming && !(y > 0.5 && y < 0.75) && mem.serveT < 3) return; // wait for the sweet spot
+  // the racket meets the ball about 0.05 s after the press: judge the height then. Better levels wait for a tighter window.
+  const yHit = serveBallHeight(game.time + 0.05);
+  const win = skill.serveWindow ?? 0.5;
+  if (Math.abs(yHit - 0.62) > win && mem.serveT < 4) return;
+  void y;
   const boxSign = -game.rally.serveXSign;
   const edge = game.singles ? 3.2 : 4.4;
   // risk = how close to the lines the bot aims; the box is [0.3 .. edge] wide and 6.9 m deep
@@ -216,7 +222,7 @@ function chooseShot(inp, game, p, os, skill) {
     if (inp.mod === 0) inp.az = os * (netOpp ? 5 : 8);
     return;
   }
-  if (netOpp >= 1 && rnd() < skill.lob) { // globo over the net players
+  if (netOpp >= 1 && rnd() < skill.lob * 0.55) { // globo over the net players (not every time: it is a change of pace, not a habit)
     inp.lob = true; inp.az = os * 8.5;
   } else if (deepOpp === opp.length && rnd() < skill.aggr * 0.5) { // dejada against deep opponents
     inp.mod = 1; inp.az = os * 1.6;

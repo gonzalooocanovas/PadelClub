@@ -53,9 +53,16 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 - ✅ `render.yaml` targets Render's Frankfurt (EU) region. A service's region cannot be changed once created: recreate the service from the Blueprint.
 
 ## Tests
-- 94 automated tests: scoring, rules, physics/spin, contact model, singles, career v2 (brackets, migration, rewards), drills, input, looks/courts, 4 real WebSocket clients.
+- 96 automated tests: scoring, rules, physics/spin, contact model, singles, career v2 (brackets, migration, rewards), drills, input, looks/courts, 4 real WebSocket clients.
 - Manually checked in the in-app browser: menu, equipment screen, the three courts (menu background), a night-arena practice match.
 - NOT checked: gamepad, audio, a real 4-human session, mobile, performance on low-end GPUs.
 
 ## Ball physics (latest pass)
 - ✅ Quadratic air drag on top of linear drag, speed-dependent glass restitution, much deader mesh above 3 m, speed-dependent floor bounce, net-tape cord (pops over with lost pace) instead of always stopping at the tape
+
+## AI, serves, replays, scoreboard (latest pass)
+- ✅ Serve timing: the bounce is judged ~0.05 s after the press and only a narrow window around waist height gives a good serve (faster and more accurate); a closing ring shows it (Timing indicator setting). Bots wait for the same window, a tighter one at higher levels, and receivers react to the serve instead of anticipating it
+- ✅ Bug fixed: perfectly struck slices and other shots could clip the net (net clearance and landing correction are now solved together)
+- ✅ Bots now attack high balls (smash, bandeja, víbora), lob less, and the levels are separated more clearly (checked by simulation: Legend beats Pro, Pro beats Club, Club beats Rookie)
+- ✅ Instant replay after each point in solo matches (slow motion, high TV camera, Space/Esc to skip, toggle in Settings). NOT in online matches: the server keeps running, so there is no safe moment to pause
+- ✅ Broadcast-style scoreboard: serving ball, set columns, games and points, animated changes, game/set/match point flags

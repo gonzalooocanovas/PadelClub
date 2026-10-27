@@ -35,7 +35,7 @@ export class LocalMatch {
     this.lastT = performance.now();
     this.resultAt = 0;
     this.finished = false;
-    this.emit({ t: 'start', slot: 0, names: this.names, looks: this.looks, settings: this.settings, score: scoreView(this.game.match), tickRate: SERVER_TICK, local: true });
+    this.emit({ t: 'start', slot: 0, names: this.names, looks: this.looks, settings: this.settings, score: scoreView(this.game.match), tickRate: SERVER_TICK, local: true, drill: !!this.controller });
     this.timer = setInterval(() => this.pump(), 8);
   }
 

@@ -5,7 +5,7 @@ import {
   COURT, PLAYER, POINT_PAUSE, DEFAULT_SETTINGS, SHOT_IDS, clamp,
 } from './constants.js';
 import {
-  stepPlayer, stepBall, makeBall, solveLaunch, simulateShot, serveLimit,
+  stepPlayer, stepBall, makeBall, serveBallHeight, solveLaunch, simulateShot, serveLimit,
 } from './physics.js';
 import { COURTS } from './looks.js';
 import {
@@ -109,8 +109,7 @@ export class PadelGame {
     const os = p.team === 0 ? 1 : -1;
     const b = this.ball;
     // the ball is bounced by hand until the serve is hit (hit below the waist after a bounce)
-    const ph = (this.time % 0.8) / 0.8;
-    b.x = p.x + os * 0.22; b.y = 0.1 + 0.86 * Math.abs(Math.cos(Math.PI * ph)); b.z = p.z + os * 0.4;
+    b.x = p.x + os * 0.22; b.y = serveBallHeight(this.time); b.z = p.z + os * 0.4;
     b.vx = b.vy = b.vz = 0; b.sb = 0; b.ss = 0; b.ex = false;
   }
 
@@ -290,7 +289,7 @@ export class PadelGame {
     let speed = 19;
     let sb = 0, ss = 0; // backspin(+)/topspin(-), sidespin
     switch (kind) {
-      case 'serve': speed = 11.5; depth = clamp(Math.abs(aimZ), 2.5, 6.3); sb = 4; break;
+      case 'serve': speed = 9.5 + 5 * q; depth = clamp(Math.abs(aimZ), 2.5, 6.3); sb = 4; break;
       case 'forehand': sb = -9; depth = clamp(depth, 3, 9.2); break; // topspin drive
       case 'backhand': sb = -6; depth = clamp(depth, 3, 9.2); break;
       case 'slice': speed = 13.5; sb = 17; depth = clamp(depth, 3, 9.2); break; // skidding backspin
@@ -317,7 +316,7 @@ export class PadelGame {
     const spinQ = 0.4 + 0.6 * q; // mishit balls carry less spin
     sb *= spinQ; ss *= spinQ;
     let tz = os * depth;
-    let err = (1 - q) * (kind === 'serve' ? 0.8 : 1.7);
+    let err = (1 - q) * (kind === 'serve' ? 1.4 : 1.7);
     if (ctx) err *= 1 + 0.8 * clamp((ctx.e - 0.4) / 0.45, 0, 1) + 0.05 * ctx.lateral; // edge hits and sideways running are less reliable
     tx += (this.rng() - 0.5) * 2 * err;
     tz += (this.rng() - 0.5) * 2 * err * 0.8;
@@ -330,23 +329,21 @@ export class PadelGame {
     const spin = { sb, ss };
     let aimX2 = tx, aimZ2 = tz;
     let v = solveLaunch(b, aimX2, aimZ2, T);
-    // well-struck balls clear the net; poor contact does not get that help
-    if (kind !== 'lob' && (!ctx || ctx.face > -0.6)) {
-      for (let i = 0; i < 18; i++) {
-        const sim = simulateShot(b, v, spin);
-        if (sim.netH === null || sim.netH >= NET_CLEAR) break;
-        T *= 1.07;
-        v = solveLaunch(b, aimX2, aimZ2, T);
-      }
-    }
-    // correct the launch so spin and drag still land the ball on the aimed spot
-    for (let i = 0; i < 3; i++) {
-      const sim = simulateShot(b, v, spin);
-      if (sim.kind !== 'floor') break;
-      const ex = tx - sim.x, ez = tz - sim.z;
-      if (Math.hypot(ex, ez) < 0.08) break;
-      aimX2 += ex; aimZ2 += ez;
+    // well-struck balls clear the net (poor contact does not get that help); then correct the launch so spin and drag
+    // still land the ball on the aimed spot. Both are checked together: fixing one must not undo the other.
+    const needClear = kind !== 'lob' && (!ctx || ctx.face > -0.6);
+    let corrections = 0;
+    for (let it = 0; it < 24; it++) {
       v = solveLaunch(b, aimX2, aimZ2, T);
+      const sim = simulateShot(b, v, spin);
+      if (needClear && (sim.kind === 'net' || (sim.netH !== null && sim.netH < NET_CLEAR))) { T *= 1.06; continue; }
+      if (sim.kind === 'floor' && corrections < 4) {
+        const ex = tx - sim.x, ez = tz - sim.z;
+        if (Math.hypot(ex, ez) < 0.08) break;
+        aimX2 += ex; aimZ2 += ez; corrections++;
+        continue;
+      }
+      break;
     }
     return { ...v, sb, ss };
   }
@@ -392,7 +389,7 @@ export class PadelGame {
     const lo = boxSign > 0 ? 0.3 : -edge;
     const hi = boxSign > 0 ? edge : -0.3;
     // contact height on the bounce decides quality: best around 0.6 m (waist height)
-    const q = clamp(0.62 + 0.36 * (1 - Math.abs(b.y - 0.62) / 0.5), 0.5, 0.98);
+    const q = clamp(1.02 - Math.abs(b.y - 0.62) / 0.3, 0.3, 0.98); // best at waist height; the window is narrow now
     const spinOv = sw.mod === 3 ? { sb: 15 } : sw.mod === 1 ? { sb: -9 } : null; // R = slice serve, Q = kick serve
     const v = this.planShot('serve', b, os, clamp(ax, lo, hi), os * clamp(Math.abs(aim.az), 2.5, 6.3), q, 0, spinOv);
     b.vx = v.vx; b.vy = v.vy; b.vz = v.vz; b.sb = v.sb; b.ss = v.ss;
@@ -400,7 +397,7 @@ export class PadelGame {
     const r = this.rally;
     r.lastTeam = p.team; r.lastSlot = p.slot; r.bounces = 0; r.hits = 1; r.netTouched = false; r.serving = true;
     this.stats.players[p.slot].hits++;
-    this.events.push({ e: 'hit', slot: p.slot, kind: 'serve', q: +q.toFixed(2), label: q >= 0.85 ? 'perfect' : q >= 0.68 ? 'good' : 'poor', x: b.x, y: b.y, z: b.z, sb: v.sb, ss: v.ss });
+    this.events.push({ e: 'hit', slot: p.slot, kind: 'serve', q: +q.toFixed(2), label: q >= 0.85 ? 'perfect' : q >= 0.6 ? 'good' : 'poor', x: b.x, y: b.y, z: b.z, sb: v.sb, ss: v.ss });
   }
 
   contact(p) {

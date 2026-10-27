@@ -82,6 +82,12 @@ export function wallE(speed, y) {
   return y > 3 ? e * 0.55 : e;
 }
 
+/** Height of the ball the server bounces by hand at game time t (period 0.8 s). */
+export function serveBallHeight(t) {
+  const ph = (t % 0.8) / 0.8;
+  return 0.1 + 0.86 * Math.abs(Math.cos(Math.PI * ph));
+}
+
 export function makeBall() {
   return { x: 0, y: 1, z: 0, vx: 0, vy: 0, vz: 0, sb: 0, ss: 0 };
 }

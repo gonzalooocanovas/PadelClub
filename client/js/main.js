@@ -467,6 +467,7 @@ net.on('start', (m) => {
   world.setSingles(m.settings.mode === 'singles');
   match = new MatchClient({
     net: m.local ? localProxy : net, world, hud, sound, start: m, input,
+    onReplay: (on) => local?.setPaused(on),
     onPause: () => {
       if (ui.modal) { ui.closeModal(); match?.setPaused(false); local?.setPaused(false); } else { ui.pauseMenu(); match?.setPaused(true); local?.setPaused(true); }
     },

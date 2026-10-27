@@ -195,19 +195,25 @@ export class UI {
       stats: null,
       hideKeys: setTimeout(() => { const k = $('#keys'); if (k) k.style.opacity = 0.0; }, 18000),
       setScore(v, n = this.names) {
+        const prev = this.lastScore;
         this.lastScore = v;
-        const cols = Math.max(1, v.sets.length + 0);
         const el = $('#score');
         if (!el) return;
+        const ns = v.sets.length;
+        const cols = `5px 14px minmax(110px, 1fr) ${'26px '.repeat(ns)}40px 50px`;
         const row = (t) => {
-          const nm = this.singles ? esc(n[t * 2]) : `${esc(n[t * 2])} / ${esc(n[t * 2 + 1])}`;
-          const sets = v.sets.map((s) => `<span class="n">${s[t]}</span>`).join('');
+          const nm = this.singles ? esc(n[t * 2]) : `${esc(n[t * 2])} <i>/</i> ${esc(n[t * 2 + 1])}`;
           const serving = v.server && v.server.team === t;
-          return `<div class="tr" style="grid-template-columns:14px 1fr ${'26px '.repeat(v.sets.length)}34px 44px"><span class="sv ${serving ? 'on' : ''}"></span><span class="tn" style="color:${TEAM_COLORS[t]}">${nm}</span>${sets}<span class="g">${v.games[t]}</span><span class="p">${v.points[t]}</span></div>`;
+          const done = v.sets.map((s) => `<span class="n ${s[t] > s[1 - t] ? 'w' : ''}">${s[t]}</span>`).join('');
+          const bump = (now, was) => (prev && was !== undefined && now !== was ? ' bump' : '');
+          const gBump = bump(v.games[t], prev?.games?.[t]);
+          const pBump = bump(v.points[t], prev?.points?.[t]);
+          return `<div class="tr t${t}" style="grid-template-columns:${cols}"><span class="tb" style="background:${TEAM_COLORS[t]}"></span><span class="sv ${serving ? 'on' : ''}"></span><span class="tn">${nm}</span>${done}<span class="g${gBump}">${v.games[t]}</span><span class="p${pBump}">${v.points[t]}</span></div>`;
         };
         const flag = v.matchPoint ? 'Match point' : v.setPoint ? 'Set point' : v.gamePoint !== null && v.gamePoint !== undefined ? 'Game point' : v.tiebreak ? 'Tiebreak' : v.label;
-        el.innerHTML = row(0) + row(1) + (flag ? `<div class="meta">${esc(flag)}</div>` : '');
-        void cols;
+        const hot = v.matchPoint ? ' hot' : v.setPoint ? ' warm' : '';
+        const head = `<div class="hd" style="grid-template-columns:1fr ${'26px '.repeat(ns)}40px 50px"><span></span>${v.sets.map((_, i) => `<span>S${i + 1}</span>`).join('')}<span>Games</span><span>Pts</span></div>`;
+        el.innerHTML = head + row(0) + row(1) + (flag ? `<div class="meta${hot}">${esc(flag)}</div>` : '');
       },
       setClock(sec) {
         const c = $('#clock');
@@ -394,6 +400,7 @@ export class UI {
       ${settings.camera === 'custom' ? range('camDist', 4, 16, 0.1, 'Custom: distance') + range('camHeight', 2.5, 16, 0.1, 'Custom: height') + range('camSmooth', 2, 12, 0.5, 'Custom: smoothing') + range('camFov', 36, 70, 1, 'Custom: field of view') : '<p class="mute" style="font-size:12px;margin:4px 0">Player: behind you · Broadcast: whole court, high · Tactical: overhead view of the positions · Custom: your own distance, height, smoothing and field of view.</p>'}
       ${range('ballScale', 1, 4, 0.1, 'Ball size (visibility)')}
       ${tog('timing', 'Timing indicator')}
+      ${tog('replays', 'Instant replays after points (solo matches)')}
       ${tog('trail', 'Ball trail')}
       ${tog('highContrast', 'High contrast UI')}
       <div class="setting"><span>Controls (keyboard, mouse, gamepad)</span><button class="btn small primary" data-act="controlsSettings">Configure…</button></div>

@@ -15,6 +15,7 @@ const DEFAULTS = {
   ballTrack: true, // the view drifts toward the ball (never changes how you move or aim)
   ballScale: 3,
   timing: true,
+  replays: true, // instant replay after each point (solo matches)
   trail: true,
   hints: true,
   highContrast: false,
