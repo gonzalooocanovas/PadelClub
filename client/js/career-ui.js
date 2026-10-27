@@ -50,6 +50,12 @@ function eventCard(c, save) {
     <p style="font-size:12px" class="mute">Up to +${e.points} ranking points · ${e.coins} coins</p>${btn}</div>`;
 }
 
+/** The upgrade list: used by the Career > Development tab and by the Upgrades button on the home screen. */
+export function upgradesHtml(save) {
+  return `<div class="upg"><p class="mute" style="margin-bottom:10px">You have <b style="color:var(--accent)">${save.devPoints}</b> upgrade points. Win matches against Club, Pro or Legend bots, finish career events, earn drill stars and complete objectives to get more. Upgrades work in every solo match (practice, 1v1, career, training) and never online, where everybody is equal.</p>
+    ${ATTRS.map((a) => { const lv = save.attrs[a]; const cost = attrCost(lv); const can = lv < ATTR_MAX && save.devPoints >= cost; return `<div class="attr"><span class="attrname">${esc(ATTR_LABELS[a])}</span><span class="pips">${Array.from({ length: ATTR_MAX }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</span><button class="btn small" data-act="attrBuy" data-attr="${a}" ${can ? '' : 'disabled'}>${lv >= ATTR_MAX ? 'Max' : '+1 (' + cost + ')'}</button></div>`; }).join('')}</div>`;
+}
+
 export function hubHtml(save, tab) {
   const cal = calendar(save);
   let body = '';
@@ -68,8 +74,7 @@ export function hubHtml(save, tab) {
   } else if (tab === 'training') {
     body = `<p class="mute" style="margin-bottom:10px">Drills use the same ball physics and shot mechanics as a match. Earn stars to gain development points; only improvements pay.</p><div class="stagegrid">${DRILLS.map((d) => `<div class="stage"><h3>${esc(d.name)}</h3><p class="mute">${esc(d.blurb)}</p><div class="row">${stars(save.drills[d.id] || 0)}<span class="grow"></span><span class="mute" style="font-size:12px">${d.stars.join(' / ')} for 1-3★</span></div><button class="btn primary" data-act="drillStart" data-drill="${d.id}">Start drill</button></div>`).join('')}</div>`;
   } else if (tab === 'development') {
-    body = `<p class="mute" style="margin-bottom:10px">Development points come from wins, titles, drills and objectives. Each attribute gives a small bonus (about +1% per level, never more than +6% speed) and only applies in your career and training matches, never online.</p>
-      ${ATTRS.map((a) => { const lv = save.attrs[a]; const cost = attrCost(lv); const can = lv < ATTR_MAX && save.devPoints >= cost; return `<div class="attr"><span class="attrname">${esc(ATTR_LABELS[a])}</span><span class="pips">${Array.from({ length: ATTR_MAX }, (_, i) => `<i class="${i < lv ? 'on' : ''}"></i>`).join('')}</span><button class="btn small" data-act="attrBuy" data-attr="${a}" ${can ? '' : 'disabled'}>${lv >= ATTR_MAX ? 'Max' : '+1 (' + cost + ')'}</button></div>`; }).join('')}`;
+    body = upgradesHtml(save);
   }
   return wrap(header(save, tab) + body);
 }

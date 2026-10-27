@@ -57,7 +57,7 @@ function moveTo(inp, p, tx, tz, skill, allowSprint) {
   const k = Math.min(1, d / 0.5) * skill.speed;
   inp.mx = (dx / d) * k;
   inp.mz = (dz / d) * k;
-  inp.sprint = allowSprint && skill.sprint && d > 2.5;
+  inp.sprint = allowSprint && skill.sprint && d > 2.5 && p.stamina > 30; // bots save their legs too
   return d;
 }
 

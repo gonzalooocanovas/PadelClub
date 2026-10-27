@@ -49,6 +49,8 @@ export class MatchClient {
     this.lastTeam = 0;
     this.serverSlot = -1;
     this.me = { x: 0, z: 0, vx: 0, vz: 0, stamina: 100, team: this.team, xLim: start.settings.mode === 'singles' ? 3.25 : PLAYER.MAX_X, pit: start.settings.mode !== 'singles' && start.settings.openings !== false };
+    const mods = start.settings.attrMods; // upgrades of a solo match: the prediction must use the same numbers as the game
+    if (mods && start.slot === 0) Object.assign(this.me, { speedMul: mods.runMul, regenMul: mods.regenMul, drainMul: mods.drainMul || 1 });
     this.pending = [];
     this.seq = 0;
     this.acc = 0;
@@ -270,6 +272,7 @@ export class MatchClient {
 
   /** Same movement rules as the server, including the serve restrictions. */
   stepMe(inp) {
+    this.me.inRally = this.phase === 'rally';
     const mul = this.swingLocal ? PLAYER.SWING_MOVE : 1; // planted while swinging
     if (this.phase === 'serve') {
       if (this.slot === this.serverSlot) stepPlayer(this.me, inp, TICK, serveLimit(this.team), mul);

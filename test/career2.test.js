@@ -138,10 +138,10 @@ test('rewards, XP, objectives (granted once), unlocks and development', () => {
   s.attrs.lob = 10; s.devPoints = 99; assert.equal(buyAttr(s, 'lob').ok, false, 'capped at 10');
 });
 
-test('attributes are modest: never more than about +6% speed, and only slot 0 of a local match benefits', () => {
+test('attributes are bounded (about +15% at most), and only slot 0 of a local match benefits', () => {
   const maxed = Object.fromEntries(ATTRS.map((a) => [a, 10]));
   const m = attrMods(maxed);
-  assert.ok(m.runMul <= 1.06 + 1e-9 && m.q.ground <= 0.1 + 1e-9 && m.window <= 1.1 + 1e-9);
+  assert.ok(m.runMul <= 1.15 + 1e-9 && m.power <= 1.15 + 1e-9 && m.drainMul >= 0.6 - 1e-9 && m.q.ground <= 0.1 + 1e-9 && m.window <= 1.1 + 1e-9);
   assert.deepEqual(attrMods(defaultSave().attrs).q, { ground: 0, volley: 0, smash: 0, lob: 0, defense: 0 });
   const dist = (settings) => { const g = new PadelGame({ settings }); g.drainEvents(); g.applyInput(0, { mx: 1 }); g.applyInput(2, { mx: 1 }); for (let i = 0; i < 90; i++) g.tick(1 / 60); return [g.players[0], g.players[2]].map((p) => Math.abs(p.x - (p === g.players[0] ? 0 : 0))); };
   const base = new PadelGame({ settings: {} }); const dev = new PadelGame({ settings: { attrMods: m } });
@@ -185,4 +185,35 @@ test('commentary is concise and matches the result', () => {
   assert.match(commentary(false, 1, 5, 'Keep it low.'), /scouting|Outplayed/);
   assert.match(commentary(false, 3, 4, 'Keep it low.'), /Keep it low/);
   assert.ok(OBJECTIVES.every((o) => o.text.length < 70));
+});
+
+test('fatigue: long rallies drain stamina even standing still, and a tired player is slower and hits worse', async () => {
+  const { stepPlayer } = await import('../shared/physics.js');
+  const still = { x: 0, z: -6, vx: 0, vz: 0, stamina: 100, team: 0, inRally: true };
+  for (let i = 0; i < 60 * 30; i++) stepPlayer(still, { mx: 0, mz: 0 }, 1 / 60);
+  assert.ok(still.stamina < 50, `30 s rally leaves ${still.stamina.toFixed(0)}`);
+  const rest = { ...still, inRally: false };
+  for (let i = 0; i < 60 * 3; i++) stepPlayer(rest, { mx: 0, mz: 0 }, 1 / 60);
+  assert.ok(rest.stamina > still.stamina + 25, 'recovers quickly between points');
+  const fresh = { x: 0, z: -6, vx: 0, vz: 0, stamina: 100, team: 0, inRally: true }, spent = { ...fresh, stamina: 5 };
+  for (let i = 0; i < 40; i++) { stepPlayer(fresh, { mx: 1, mz: 0 }, 1 / 60); stepPlayer(spent, { mx: 1, mz: 0 }, 1 / 60); }
+  assert.ok(spent.x < fresh.x * 0.9, 'exhausted players are slower');
+  const { PadelGame } = await import('../shared/game.js');
+  const hitQ = (stamina) => {
+    const g = new PadelGame({ rng: () => 0.5 });
+    g.phase = 'rally';
+    g.rally = { serving: false, faults: 0, lastTeam: 1, lastSlot: 2, bounces: 1, hits: 3, netTouched: false, serveXSign: 1 };
+    Object.assign(g.ball, { x: 1, y: 0.9, z: -6, vx: 0, vy: 0, vz: 0 });
+    Object.assign(g.players[0], { x: 0.2, z: -6.6, stamina });
+    g.startSwing(g.players[0], { ax: 0, az: 8, mod: 0, lob: false });
+    for (let i = 0; i < 40; i++) { g.players[0].stamina = stamina; g.tick(1 / 60); const h = g.drainEvents().find((e) => e.e === 'hit'); if (h) return h.q; }
+    return null;
+  };
+  const fresh100 = hitQ(100), exhausted = hitQ(0);
+  assert.ok(fresh100 !== null && exhausted !== null && exhausted < fresh100 - 0.1, `exhausted contact is worse (${exhausted} vs ${fresh100})`);
+});
+
+test('power and stamina upgrades change the numbers', () => {
+  const a = attrMods({ ...defaultSave().attrs, power: 10, stamina: 10, movement: 10 });
+  assert.ok(a.power > 1.1 && a.runMul > 1.1 && a.drainMul < 0.7 && a.regenMul > 1.3);
 });

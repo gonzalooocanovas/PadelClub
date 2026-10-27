@@ -65,6 +65,7 @@ export class UI {
           <button class="btn primary" data-act="create" ${status !== 'online' ? 'disabled' : ''}>Play with friends <small>create private room</small></button>
           <button class="btn" data-act="career">Career <small>${careerStars || 'seasons, rankings, training'}</small></button>
           <button class="btn" data-act="equipment">Equipment <small>player &amp; racket</small></button>
+          <button class="btn" data-act="upgrades">Upgrades <small>speed, power, stamina…</small></button>
           <div class="row levelrow"><span class="label">Court</span><div class="seg grow">${COURT_IDS.map((c) => `<button data-act="court" data-val="${c}" class="${court === c ? 'on' : ''}">${COURT_SHORT[c]}</button>`).join('')}</div></div>
           <div class="row levelrow"><span class="label">Bots</span><div class="seg grow">${BOT_LEVELS.map((l) => `<button data-act="level" data-val="${l}" class="${level === l ? 'on' : ''}">${BOT_LABELS[l]}</button>`).join('')}</div></div>
           <button class="btn" data-act="practice" ${status !== 'online' ? 'disabled' : ''}>Practice 2 vs 2 <small>you + 3 bots</small></button>
@@ -183,7 +184,7 @@ export class UI {
         <div class="timing hidden" id="timing"><i class="t-out"></i><i class="t-in"></i><span></span></div>
         <div class="chatfeed" id="feed"></div>
         <div class="bottomleft">
-          <div class="label">Stamina</div><div class="bar" style="margin-top:6px"><i id="stam" style="width:100%"></i></div>
+          <div class="label" id="stamLabel">Stamina</div><div class="bar" style="margin-top:6px"><i id="stam" style="width:100%"></i></div>
           <div class="keys" id="keys">WASD or arrows move · Shift sprint · X jump<br><b>Space hit</b> · G globo · R slice<br>Q soft / víbora · E bandeja / block · M mouse aim<br>Hold a direction as you hit: that is where the ball goes<br><br>Tab stats · Esc menu · 1–4 quick chat</div>
         </div>
         <div class="statsov hidden" id="statsov"><div class="panel modal" id="statsbody"></div></div>
@@ -222,7 +223,8 @@ export class UI {
         if (c) c.textContent = `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`;
       },
       setVitals(stam, rtt) {
-        const s = $('#stam'); if (s) s.style.width = `${stam}%`;
+        const s = $('#stam'); if (s) { s.style.width = `${stam}%`; s.classList.toggle('tired', stam < 50); s.classList.toggle('spent', stam < 25); }
+        const sl = $('#stamLabel'); if (sl) sl.textContent = stam < 25 ? 'Exhausted' : stam < 50 ? 'Tired' : 'Stamina';
         const p = $('#ping'); if (p) p.textContent = rtt ? `${rtt} ms` : '– ms';
         const d = $('#pingDot'); if (d) d.className = `dot ${pingClass(rtt)}`;
       },

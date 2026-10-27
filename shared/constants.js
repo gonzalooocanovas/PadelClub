@@ -35,6 +35,9 @@ export const PLAYER = {
   STAMINA_MAX: 100,
   SPRINT_COST: 24, // per second
   STAMINA_REGEN: 13,
+  RALLY_DRAIN: 1.5, // stamina lost per second while the ball is in play, even standing still: long points wear you down
+  RALLY_REGEN: 0, // no recovery during a rally (full rate between points)
+  TIRED_FROM: 45, // below this stamina you slow down and hit worse
   REACH: 1.8,
   SWING_MOVE: 0.3, // movement speed multiplier while swinging: the player is "planted" and steers the shot
   JUMP_TIME: 0.62,

@@ -41,7 +41,7 @@ export class PadelGame {
       active: !(this.settings.mode === 'singles' && (slot === 1 || slot === 3)),
       xLim: this.settings.mode === 'singles' ? 3.25 : PLAYER.MAX_X,
     }));
-    if (this.mods) { this.players[0].speedMul = this.mods.runMul; this.players[0].regenMul = this.mods.regenMul; }
+    if (this.mods) { this.players[0].speedMul = this.mods.runMul; this.players[0].regenMul = this.mods.regenMul; this.players[0].drainMul = this.mods.drainMul || 1; }
     this.ball = makeBall();
     this.ball.hw = this.singles ? 3.5 : COURT.HALF_W;
     this.openings = !this.singles && this.settings.openings !== false; // access doors in the side walls (doubles)
@@ -137,12 +137,13 @@ export class PadelGame {
 
     for (const p of this.players) {
       if (!p.active) continue;
+      p.inRally = this.phase === 'rally';
       if (live) {
         const mul = p.swing ? PLAYER.SWING_MOVE : 1; // planted while swinging
         if (this.phase !== 'serve') stepPlayer(p, p.input, dt, undefined, mul);
         else if (p.slot === this.serverSlot) stepPlayer(p, p.input, dt, serveLimit(p.team), mul); // server: behind the line only
-        else { p.vx = 0; p.vz = 0; } // everyone else waits for the serve
-      }
+        else { p.vx = 0; p.vz = 0; this.rest(p, dt); } // everyone else waits for the serve (and catches their breath)
+      } else this.rest(p, dt); // between points everybody recovers
       p.jumpT = Math.max(0, p.jumpT - dt);
       p.cd = Math.max(0, p.cd - dt);
       if (live && p.wantJump && p.jumpT <= 0) p.jumpT = PLAYER.JUMP_TIME;
@@ -234,6 +235,10 @@ export class PadelGame {
     p.z = p.team === 0 ? clamp(nz, -COURT.HALF_L + PLAYER.BACK_GAP, -PLAYER.NET_GAP) : clamp(nz, PLAYER.NET_GAP, COURT.HALF_L - PLAYER.BACK_GAP);
   }
 
+  rest(p, dt) {
+    p.stamina = Math.min(PLAYER.STAMINA_MAX, p.stamina + PLAYER.STAMINA_REGEN * (p.regenMul || 1) * dt);
+  }
+
   separateTeammates() {
     if (this.singles) return;
     for (let t = 0; t < 2; t++) {
@@ -314,6 +319,7 @@ export class PadelGame {
       sb *= ctx.spinMul || 1; ss *= ctx.spinMul || 1;
       speed *= 1 - 0.22 * clamp(ctx.e / 0.85, 0, 1); // energy lost off-centre
       speed *= 1 + clamp(ctx.forward, -3, 3) * 0.012; // moving into the shot adds pace
+      speed *= ctx.powerMul || 1; // upgrades add pace, fatigue takes it away
     }
     const spinQ = 0.4 + 0.6 * q; // mishit balls carry less spin
     sb *= spinQ; ss *= spinQ;
@@ -391,7 +397,8 @@ export class PadelGame {
     const lo = boxSign > 0 ? 0.3 : -edge;
     const hi = boxSign > 0 ? edge : -0.3;
     // contact height on the bounce decides quality: best around 0.6 m (waist height)
-    const q = clamp(1.02 - Math.abs(b.y - 0.62) / 0.3, 0.3, 0.98); // best at waist height; the window is narrow now
+    const tiredK = clamp((PLAYER.TIRED_FROM - p.stamina) / PLAYER.TIRED_FROM, 0, 1);
+    const q = clamp(1.02 - Math.abs(b.y - 0.62) / 0.3 - 0.2 * tiredK, 0.3, 0.98); // best at waist height; the window is narrow, and a tired server is less accurate
     const spinOv = sw.mod === 3 ? { sb: 15 } : sw.mod === 1 ? { sb: -9 } : null; // R = slice serve, Q = kick serve
     const v = this.planShot('serve', b, os, clamp(ax, lo, hi), os * clamp(Math.abs(aim.az), 2.5, 6.3), q, 0, spinOv);
     b.vx = v.vx; b.vy = v.vy; b.vz = v.vz; b.sb = v.sb; b.ss = v.ss;
@@ -429,6 +436,8 @@ export class PadelGame {
     if (Math.hypot(p.vx, p.vz) > 6.2) q -= 0.08; // off balance at full sprint
     if ((p.vx * -dx + p.vz * -dz) / (d || 1) < -2.5) q -= 0.1; // running away from the ball
     q = clamp(q * 0.8 + 0.2, 0.3, 1); // forgiving: contact is never worse than "late"
+    const tiredK = clamp((PLAYER.TIRED_FROM - p.stamina) / PLAYER.TIRED_FROM, 0, 1);
+    q = clamp(q - 0.25 * tiredK, 0.3, 1); // exhausted players mistime and mishit
     if (p.slot === 0 && this.mods) { // development bonus for the matching skill, kept small
       const grp = { forehand: 'ground', backhand: 'ground', volley: 'volley', smash: 'smash', bandeja: 'smash', vibora: 'smash', lob: 'lob', slice: 'defense', block: 'defense', chiquita: 'defense', drop: 'defense' }[kind];
       q = clamp(q + (this.mods.q[grp] || 0), 0.3, 1);
@@ -440,7 +449,7 @@ export class PadelGame {
     const timing = clamp((sw.t - 0.17) / 0.12, -1, 1);
     const face = clamp(-timing * 0.8 + (b.y < 0.5 ? 0.4 : b.y > 1.6 && b.y <= 2.1 ? -0.2 : 0), -1, 1);
     const e = Math.abs(d - 0.95);
-    const ctx = { face, e, lateral: Math.abs(p.vx), forward: p.vz * os, spinMul: p.slot === 0 && this.mods ? this.mods.spin : 1 };
+    const ctx = { face, e, lateral: Math.abs(p.vx), forward: p.vz * os, spinMul: p.slot === 0 && this.mods ? this.mods.spin : 1, powerMul: (p.slot === 0 && this.mods ? this.mods.power || 1 : 1) * (1 - 0.16 * tiredK) };
 
     let label;
     if (q < 0.4) label = 'poor';

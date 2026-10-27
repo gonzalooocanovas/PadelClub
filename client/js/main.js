@@ -14,7 +14,7 @@ import {
   simulateMatch, applyMatch, completeEvent, commentary, buyAttr, attrMods, applyDrill, claimObjectives, rankOf, RESULT_LABELS,
 } from '/shared/career2.js';
 import { ROSTER_BY_ID } from '/shared/roster.js';
-import { hubHtml, eventHtml, eventResultHtml, drillResultHtml } from './career-ui.js';
+import { hubHtml, eventHtml, eventResultHtml, drillResultHtml, upgradesHtml } from './career-ui.js';
 import { DrillController } from './drills.js';
 import { entryFrom, addEntry, loadHistory, saveHistory, summarize } from '/shared/history.js';
 
@@ -135,17 +135,37 @@ function startLocalMatch(cfg) {
   const names = c?.names || (cfg.mode === 'singles' ? [me, 'AI', 'AI', 'AI'] : [me, 'AI', 'AI', 'AI']);
   const diffs = c?.diffs || ['', cfg.difficulty, cfg.difficulty, cfg.difficulty];
   const looks = c?.looks || [myLook, DEFAULT_LOOKS[1], DEFAULT_LOOKS[2], DEFAULT_LOOKS[3]];
-  if (cfg.attrMods) s.attrMods = cfg.attrMods;
+  s.attrMods = cfg.attrMods || attrMods(loadCareer().attrs); // upgrades apply to every solo match, never online
   s.court = cfg.court || court;
   room = { settings: s, hostId: 'local', you: 'local', slots: [], state: 'match', code: 'LOCAL' };
   local = new LocalMatch({
     settings: s, names, diffs, looks: looks.map((l, i) => sanitizeLook(l, i)),
     onMessage: (m) => net.emit(m.t, m),
-    onFinish: cfg.onFinish || (() => null),
+    onFinish: cfg.onFinish || (cfg.reward ? (r) => practiceReward(cfg, r) : () => null),
     controller: cfg.controller || null,
     passive: !!cfg.passive,
   });
   local.start();
+}
+
+// ---------------------------------------------------------------- upgrades
+
+function showUpgrades() {
+  const save = loadCareer();
+  const el = ui.openModal(`<h2>Player upgrades</h2>${upgradesHtml(save)}`);
+  el.querySelector('.modal').classList.add('wide');
+}
+
+/** Practice wins against stronger bots pay upgrade points (nothing against Rookies, so they cannot be farmed). */
+function practiceReward(cfg, results) {
+  if (results.winner !== 0) return null;
+  const pts = { easy: 0, normal: 1, hard: 2, expert: 3 }[cfg.difficulty] || 0;
+  if (!pts) return null;
+  const save = loadCareer();
+  save.devPoints += pts; save.xp += 10 * pts;
+  saveCareer(save);
+  setTimeout(() => toast(`+${pts} upgrade point${pts > 1 ? 's' : ''} (Upgrades on the home screen)`), 4600);
+  return null;
 }
 
 // ---------------------------------------------------------------- career v2
@@ -354,14 +374,15 @@ function act(name, d, el) {
       const s = loadCareer();
       const r = buyAttr(s, d.attr);
       if (!r.ok) toast(r.reason, true); else { claimObjectives(s); saveCareer(s); }
-      showCareer('development');
+      if (document.querySelector('#modal .upg')) showUpgrades(); else showCareer('development');
       break;
     }
     case 'careerBack': showHome(); break;
     case 'rooms': ui.roomsModal(null); net.send({ t: 'rooms' }); break;
     case 'joinRoom': ui.closeModal(); net.send({ t: 'join', code: d.code, name: myName() }); break;
-    case 'practice': startLocalMatch({ mode: 'doubles', difficulty: level }); break;
-    case 'practice1': startLocalMatch({ mode: 'singles', difficulty: level }); break;
+    case 'upgrades': showUpgrades(); break;
+    case 'practice': startLocalMatch({ mode: 'doubles', difficulty: level, reward: true }); break;
+    case 'practice1': startLocalMatch({ mode: 'singles', difficulty: level, reward: true }); break;
     case 'join': {
       const code = val('joinCode').trim().toUpperCase();
       if (code.length !== 5) { toast('Enter the 5-character room code', true); break; }

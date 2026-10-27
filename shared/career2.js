@@ -7,10 +7,11 @@ import { PadelGame } from './game.js';
 import { botInput, makeBotMemory } from './ai.js';
 
 export const CAREER_VERSION = 2;
-export const ATTRS = ['groundstroke', 'volley', 'smash', 'lob', 'movement', 'reaction', 'stamina', 'defense', 'variety'];
+export const ATTRS = ['movement', 'power', 'stamina', 'groundstroke', 'volley', 'smash', 'lob', 'reaction', 'defense', 'variety'];
 export const ATTR_LABELS = {
+  movement: 'Speed (+1.5% running speed per level)', power: 'Power (+1.5% shot pace per level)', stamina: 'Stamina (tires 4% slower, recovers 4% faster)',
   groundstroke: 'Groundstroke consistency', volley: 'Volley control', smash: 'Smash power', lob: 'Lob precision',
-  movement: 'Movement', reaction: 'Reaction', stamina: 'Stamina', defense: 'Defensive recovery', variety: 'Shot variety',
+  reaction: 'Reaction (longer hitting window)', defense: 'Defensive recovery', variety: 'Shot variety (more spin)',
 };
 export const ATTR_MAX = 10;
 
@@ -332,13 +333,13 @@ export function buyAttr(save, attr) {
 }
 
 /**
- * Gameplay modifiers from the attributes. Deliberately small (about +6% at most) so a developed player is better,
- * not a different species. Only ever applied to local single-player matches: online everybody is equal.
+ * Gameplay modifiers from the attributes. Noticeable but bounded (about +15% speed and pace at the maximum), so a developed player is better, not a different species.
+ * Only ever applied to local single-player matches: online everybody is equal.
  */
 export function attrMods(a) {
   const x = (k) => Math.min(ATTR_MAX, a?.[k] || 0);
   return {
-    runMul: 1 + 0.006 * x('movement'), regenMul: 1 + 0.03 * x('stamina'), spin: 1 + 0.03 * x('variety'),
+    runMul: 1 + 0.015 * x('movement'), power: 1 + 0.015 * x('power'), regenMul: 1 + 0.04 * x('stamina'), drainMul: 1 - 0.04 * x('stamina'), spin: 1 + 0.03 * x('variety'),
     window: 1 + 0.01 * x('reaction'),
     q: { ground: 0.01 * x('groundstroke'), volley: 0.01 * x('volley'), smash: 0.01 * x('smash'), lob: 0.01 * x('lob'), defense: 0.01 * x('defense') },
   };

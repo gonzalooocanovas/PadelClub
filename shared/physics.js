@@ -16,7 +16,8 @@ export function stepPlayer(p, inp, dt, limit, mul = 1) {
   if (len > 1) { mx /= len; mz /= len; }
   const moving = len > 0.05;
   const sprinting = !!inp.sprint && moving && p.stamina > 4 && mul >= 1;
-  const max = (sprinting ? PLAYER.SPRINT : PLAYER.RUN) * mul * (p.speedMul || 1); // speedMul: career development, local matches only
+  const tired = clamp((PLAYER.TIRED_FROM - p.stamina) / PLAYER.TIRED_FROM, 0, 1); // 0 fresh .. 1 exhausted
+  const max = (sprinting ? PLAYER.SPRINT : PLAYER.RUN) * mul * (p.speedMul || 1) * (1 - 0.18 * tired); // speedMul: upgrades, local matches only
   const tvx = mx * max;
   const tvz = mz * max;
   const dvx = tvx - p.vx;
@@ -34,8 +35,11 @@ export function stepPlayer(p, inp, dt, limit, mul = 1) {
   const prevX = p.x;
   p.x += p.vx * dt;
   p.z += p.vz * dt;
-  if (sprinting) p.stamina = Math.max(0, p.stamina - PLAYER.SPRINT_COST * dt);
-  else p.stamina = Math.min(PLAYER.STAMINA_MAX, p.stamina + PLAYER.STAMINA_REGEN * (p.regenMul || 1) * dt);
+  const drain = p.drainMul || 1;
+  if (sprinting) p.stamina -= PLAYER.SPRINT_COST * drain * dt;
+  else p.stamina += (p.inRally ? PLAYER.RALLY_REGEN : PLAYER.STAMINA_REGEN) * (p.regenMul || 1) * dt;
+  if (p.inRally) p.stamina -= PLAYER.RALLY_DRAIN * drain * dt;
+  p.stamina = clamp(p.stamina, 0, PLAYER.STAMINA_MAX);
 
   const xl = p.xLim || PLAYER.MAX_X;
   // players cannot cross the net

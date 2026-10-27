@@ -238,3 +238,6 @@ kbd { background: #0d141e; border: 1px solid var(--line); border-bottom-width: 2
 .rallychip small { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--mute); }
 .rallychip b { font-size: 22px; font-variant-numeric: tabular-nums; }
 .rallychip.long b { color: var(--accent); }
+
+#stam.tired { background: #ffc857; }
+#stam.spent { background: var(--bad); animation: svpulse .8s ease-in-out infinite; }
