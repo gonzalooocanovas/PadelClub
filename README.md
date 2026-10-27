@@ -33,6 +33,8 @@ Requires Node 20+. No build step: the client is plain ES modules served by the s
 **Practice vs AI** starts a room with you and three bots. Empty seats are only ever filled by clearly labelled AI.
 
 ### Controls
+Open **Settings → Controls → Configure** to pick a scheme (Classic keyboard, Keyboard + mouse aim, Gamepad, Custom), rebind every action (keyboard, mouse or gamepad), tune the stick, and test your inputs live. Defaults:
+
 | Input | Action |
 |---|---|
 | W A S D | Move (camera-relative; W = toward the net) |

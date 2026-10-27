@@ -26,8 +26,11 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 - ❌ Stamina effects beyond sprint, player-player collisions beyond teammate separation
 
 ## Controls
-- 🟡 Keyboard play (WASD/arrows + Space, G, R, Q, E, Shift, X), steering aim; mouse clicks hit but the mouse does not aim
-- ❌ Input mapping module, remapping UI, gamepad support, mouse aiming with landing marker, camera presets
+- ✅ Input module (client/js/input.js): keyboard, mouse buttons and gamepad become actions; 4 schemes (Classic keyboard, Keyboard + mouse aim, Gamepad, Custom); per-device bindings; rebinding with press-to-assign, Esc cancels, duplicate detection resolved by swapping; restore defaults; live input test; controller diagram showing the real mapping; dead zone, response curve, hold/toggle sprint, aim marker on/off; versioned persistence with safe fallback
+- ✅ Mouse aiming: ray from the camera onto the court; ring marks the target area and widens when the ball is far from the sweet spot (it is an area, not a guarantee). Off by default: the mouse is never required
+- ✅ Right stick (or left stick) places the shot; keyboard steering is resolved by the server at contact
+- 🟡 Tested automatically: bindings, conflicts, persistence, corrupt storage, pad reading, capture. Checked in the browser with a SIMULATED gamepad and simulated key events: NOT with a physical controller
+- ❌ Mouse wheel actions, pointer-lock cursor capture, separate per-player profiles in one browser, camera presets, power indicator, aim assist
 
 ## Career
 - 🟡 8-stage ladder with named opponents/partners, stars, XP, per-stage court and looks, progress saved in the browser

@@ -18,7 +18,8 @@ const REASONS = {
 const QUICK = ['Nice shot!', 'Mine!', 'Yours!', 'Switch!'];
 
 export class MatchClient {
-  constructor({ net, world, hud, sound, start, onPause }) {
+  constructor({ net, world, hud, sound, start, onPause, input }) {
+    this.input = input;
     this.net = net; this.world = world; this.hud = hud; this.sound = sound; this.onPause = onPause;
     this.interp = start.local ? 0.03 : 0.07; // render delay: tiny for local matches, a few snapshots online
     this.slot = start.slot;
@@ -34,8 +35,6 @@ export class MatchClient {
     this.pending = [];
     this.seq = 0;
     this.acc = 0;
-    this.keys = new Set();
-    this.mouse = { x: 0, y: 0 };
     this.want = { swing: false, lob: false, jump: false, mod: 0 };
     this.swingLocal = null;
     this.aim = new THREE.Vector3(0, 0, this.os * 6);
@@ -58,89 +57,63 @@ export class MatchClient {
   // ------------------------------------------------------------------ input
 
   bind() {
-    const typing = () => /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '');
-    this.onKeyDown = (e) => {
-      if (typing()) return;
-      const k = e.key.toLowerCase();
-      if (e.key === 'Escape') { this.onPause?.(); return; }
-      if (e.key === 'Tab') { e.preventDefault(); this.hud.showStats(true); return; }
-      if (e.repeat) return;
-      this.keys.add(k);
-      if (k === ' ') { this.want.swing = true; this.want.lob = false; e.preventDefault(); } // Space = hit / serve
-      if (k === 'g' || k === 'enter') { this.want.swing = true; this.want.lob = true; } // globo (lob)
-      if (k === 'x') this.want.jump = true;
-      if (k.startsWith('arrow')) e.preventDefault(); // arrows move, like WASD
-      // shot keys hit straight away with their shot (they can also be held together with Space)
-      if (k === 'r') { this.want.swing = true; this.want.lob = false; this.want.mod = 3; }
-      if (k === 'q') { this.want.swing = true; this.want.lob = false; this.want.mod = 1; }
-      if (k === 'e') { this.want.swing = true; this.want.lob = false; this.want.mod = 2; }
-      if (k >= '1' && k <= '4') this.net.send({ t: 'chat', text: QUICK[+k - 1] });
-    };
-    this.onKeyUp = (e) => {
-      if (e.key === 'Tab') { this.hud.showStats(false); return; }
-      this.keys.delete(e.key.toLowerCase());
-    };
-    this.onMouseMove = (e) => {
-      this.mouse.x = e.clientX; this.mouse.y = e.clientY;
-    };
-    this.onMouseDown = (e) => {
-      if (this.paused || e.target !== this.world.canvas) return;
+    const i = this.input;
+    const hit = (lob, mod) => () => {
+      if (this.paused) return;
       this.sound.unlock();
-      if (e.button === 0) { this.want.swing = true; this.want.lob = false; }
-      if (e.button === 2) { this.want.swing = true; this.want.lob = true; }
+      this.want.swing = true; this.want.lob = lob;
+      if (mod) this.want.mod = mod;
     };
-    this.onCtx = (e) => e.preventDefault();
-    this.onBlur = () => this.keys.clear();
+    this.unsubs = [
+      i.on('hit', hit(false, 0)), i.on('lob', hit(true, 0)),
+      i.on('slice', hit(false, 3)), i.on('soft', hit(false, 1)), i.on('control', hit(false, 2)),
+      i.on('jump', () => { if (!this.paused) this.want.jump = true; }),
+      i.on('pause', () => this.onPause?.()),
+      i.on('stats', () => this.hud.showStats(true)),
+      i.on('statsUp', () => this.hud.showStats(false)),
+      i.on('chat', (n) => this.net.send({ t: 'chat', text: QUICK[n] })),
+    ];
     this.onVis = () => {
       if (document.hidden) {
-        this.keys.clear();
+        i.clear();
         this.net.send({ t: 'in', inputs: [{ seq: ++this.seq, mx: 0, mz: 0 }] });
         this.pending = [];
       }
     };
-    addEventListener('keydown', this.onKeyDown);
-    addEventListener('keyup', this.onKeyUp);
-    addEventListener('pointermove', this.onMouseMove);
-    addEventListener('pointerdown', this.onMouseDown);
-    addEventListener('contextmenu', this.onCtx);
-    addEventListener('blur', this.onBlur);
     document.addEventListener('visibilitychange', this.onVis);
   }
 
   stop() {
     this.stopped = true;
-    removeEventListener('keydown', this.onKeyDown);
-    removeEventListener('keyup', this.onKeyUp);
-    removeEventListener('pointermove', this.onMouseMove);
-    removeEventListener('pointerdown', this.onMouseDown);
-    removeEventListener('contextmenu', this.onCtx);
-    removeEventListener('blur', this.onBlur);
+    this.unsubs?.forEach((u) => u());
     document.removeEventListener('visibilitychange', this.onVis);
     this.sound.stopAmbience();
   }
 
-  setPaused(p) { this.paused = p; if (p) this.keys.clear(); }
+  setPaused(p) { this.paused = p; if (p) this.input.clear(); }
 
-  /** WASD relative to the camera, which always looks toward the opponents. */
+  /** Movement relative to the camera, which always looks toward the opponents. */
   moveAxes() {
-    const k = this.keys;
-    const fwd = (k.has('w') || k.has('arrowup') ? 1 : 0) - (k.has('s') || k.has('arrowdown') ? 1 : 0);
-    const rgt = (k.has('d') || k.has('arrowright') ? 1 : 0) - (k.has('a') || k.has('arrowleft') ? 1 : 0);
+    const a = this.input.axes(); // x = right, y = forward
     // camera faces (0,0,os); screen-right is (-os, 0, 0)
-    return { mx: -this.os * rgt, mz: this.os * fwd };
+    return { mx: -this.os * a.x, mz: this.os * a.y };
   }
 
   /**
-   * Aiming has three modes, switching to whichever input you used last:
-   *  auto  (default): the ball goes to the open side of the court, away from the opponents
-   *  keys  : arrow keys move the target
-   *  mouse : the target follows the mouse pointer
+   * Where the shot is aimed. Three sources, chosen by the control settings:
+   *  mouse  : the target follows the cursor (ray from the camera onto the court)
+   *  stick  : the right stick places the shot
+   *  steer  : the direction you hold as you hit (keyboard, or the left stick): left/right = that side, forward = deep, back = short
    */
   updateAim(dt) {
     const os = this.os;
-    if (this.aimMode === 'mouse') {
+    const inp = this.input;
+    const st = inp.aimStick();
+    this.aimSource = inp.settings.mouseAim ? 'mouse' : st.active ? 'stick' : 'steer';
+    if (this.aimSource === 'mouse') {
       const w = innerWidth, h = innerHeight;
-      const ndc = new THREE.Vector2((this.mouse.x / w) * 2 - 1, -(this.mouse.y / h) * 2 + 1);
+      const ndc = new THREE.Vector2((inp.mouse.x / w) * 2 - 1, -(inp.mouse.y / h) * 2 + 1);
+      if (!inp.mouse.moved) ndc.set(0, 0.1);
       this.ray.setFromCamera(ndc, this.world.camera);
       const o = this.ray.ray.origin, d = this.ray.ray.direction;
       let x = 0, z = os * 6;
@@ -150,15 +123,8 @@ export class MatchClient {
       }
       this.kbAim.x = clamp(x, -4.6, 4.6);
       this.kbAim.z = os * clamp(Math.abs(z) * (z * os > 0 ? 1 : 0) || 1.2, 1.2, 9.4);
-    } else if (this.aimMode === 'keys') {
-      const k = this.keys;
-      const dx = (k.has('arrowright') ? 1 : 0) - (k.has('arrowleft') ? 1 : 0);
-      const dz = (k.has('arrowup') ? 1 : 0) - (k.has('arrowdown') ? 1 : 0);
-      // screen-right is world (-os, 0, 0); "up" means deeper into the opponents' half
-      this.kbAim.x = clamp(this.kbAim.x - os * dx * dt * 6, -4.6, 4.6);
-      this.kbAim.z = os * clamp(Math.abs(this.kbAim.z) + dz * dt * 6, 1.2, 9.4);
     } else {
-      // auto: aim at the side with more room, deep unless the opponents are deep
+      // opponents' positions decide the default: the open side, deep unless they are deep already
       const row = this.snaps.at(-1)?.p;
       let ox = 0, oz = 6;
       if (row) {
@@ -166,31 +132,35 @@ export class MatchClient {
         ox = (opp[0][0] + opp[1][0]) / 2;
         oz = (Math.abs(opp[0][1]) + Math.abs(opp[1][1])) / 2;
       }
-// where you steer decides where the ball goes: A/D = that side, W = deep, S = short
-      const k = this.keys;
-      const steerX = (k.has('d') || k.has('arrowright') ? 1 : 0) - (k.has('a') || k.has('arrowleft') ? 1 : 0);
-      const steerZ = (k.has('w') || k.has('arrowup') ? 1 : 0) - (k.has('s') || k.has('arrowdown') ? 1 : 0);
+      const ax = inp.axes();
+      const sx = this.aimSource === 'stick' ? st.x : ax.x;
+      const sz = this.aimSource === 'stick' ? st.y : ax.y;
+      const steerX = Math.abs(sx) > 0.25 ? clamp(sx, -1, 1) : 0;
+      const steerZ = Math.abs(sz) > 0.25 ? Math.sign(sz) : 0;
       let tx, depth;
       if (steerX) tx = -os * steerX * 3.4; // screen-right is world (-os, 0, 0)
       else tx = (Math.abs(ox) < 0.6 ? (this.me.x > 0 ? -1 : 1) : -Math.sign(ox)) * 2.8;
       if (steerZ > 0) depth = 8.8;
       else if (steerZ < 0) depth = 3.0;
       else depth = oz < 4.5 ? 8.6 : 6.6; // opponents at the net: lob over them
-      this.kbAim.x += (tx - this.kbAim.x) * Math.min(1, dt * 12);
-      this.kbAim.z += (os * depth - this.kbAim.z) * Math.min(1, dt * 12);
+      const k = this.aimSource === 'stick' ? 1 : Math.min(1, dt * 12);
+      this.kbAim.x += (tx - this.kbAim.x) * k;
+      this.kbAim.z += (os * depth - this.kbAim.z) * k;
     }
     this.aim.set(this.kbAim.x, 0.03, this.kbAim.z);
   }
 
   buildInput() {
     const { mx, mz } = this.moveAxes();
-    const held = this.keys.has('q') ? 1 : this.keys.has('e') ? 2 : this.keys.has('r') ? 3 : 0;
+    const i = this.input;
+    const held = i.actionDown('soft') ? 1 : i.actionDown('control') ? 2 : i.actionDown('slice') ? 3 : 0;
     const mod = this.want.swing && this.want.mod ? this.want.mod : held;
     const inp = {
-      seq: ++this.seq, mx, mz, sprint: this.keys.has('shift'),
+      seq: ++this.seq, mx, mz, sprint: i.actionDown('sprint'),
       ax: +this.aim.x.toFixed(2), az: +this.aim.z.toFixed(2), mod,
       swing: this.want.swing, lob: this.want.lob, jump: this.want.jump,
-      steer: true, // the direction you hold at contact decides the shot
+      // keyboard steering is resolved by the server at contact; a mouse or right-stick target is sent as an explicit point
+      steer: this.aimSource === 'steer',
     };
     if (this.want.swing && !this.swingLocal) this.swingLocal = { t: 0, kind: this.guessKind(inp) };
     this.want.swing = false; this.want.jump = false; this.want.mod = 0;
@@ -381,6 +351,16 @@ export class MatchClient {
     // reticle + reach ring (timing aid)
     w.reticle.position.set(this.aim.x, 0.04, this.aim.z);
     w.reticleDot.position.copy(w.reticle.position);
+    // the ring is the target AREA, not a promise: it widens when the ball is far from the sweet spot (worse contact)
+    const marker = this.input.settings.aimMarker;
+    w.reticle.visible = w.reticleDot.visible = marker;
+    {
+      const bb = this.ballView;
+      const dd = Math.hypot(bb.x - this.me.x, bb.z - this.me.z);
+      const incoming = this.lastTeam !== this.team && this.phase === 'rally' && dd < 4;
+      const radius = 0.3 + (incoming ? Math.min(1, Math.abs(dd - 0.95) / 1.7) * 0.9 : 0.15);
+      w.reticle.scale.setScalar(radius / 0.3);
+    }
     const b = this.ballView;
     const d = Math.hypot(b.x - this.me.x, b.z - this.me.z);
     const mine = this.lastTeam !== this.team && this.phase === 'rally';

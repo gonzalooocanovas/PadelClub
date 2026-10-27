@@ -1,6 +1,7 @@
 // DOM screens: home, lobby, HUD, results, modals. Pure presentation + callbacks into main.js.
 import { settings, setSetting } from './settings.js';
 import { BOT_LEVELS, BOT_LABELS } from '/shared/ai.js';
+import { controlsHtml } from './controls-ui.js';
 import { ARCHETYPES, HAIR_STYLES, SKIN_TONES, RACKETS, COURTS, COURT_IDS } from '/shared/looks.js';
 
 const COURT_SHORT = { indoor: 'Indoor', outdoor: 'Outdoor', night: 'Night' };
@@ -365,6 +366,15 @@ export class UI {
     document.querySelectorAll('#modal [data-act^=look]').forEach((b) => b.classList.toggle('on', want[b.dataset.act] === +b.dataset.val));
   }
 
+  controlsModal(s, st) {
+    const el = $('#modal');
+    if (el) { this.reopenScroll = el.querySelector('.modal').scrollTop; el.remove(); this.modal = null; } // keep the scroll position when the screen refreshes
+    const m = this.openModal(controlsHtml(s, st));
+    m.querySelector('.modal').classList.add('wide');
+    if (this.reopenScroll) { m.querySelector('.modal').scrollTop = this.reopenScroll; this.reopenScroll = 0; }
+    return m;
+  }
+
   pauseMenu() {
     this.openModal(`<h2>Paused</h2><p class="mute" style="margin-bottom:14px">The match keeps running for the other players.</p>
       <div class="col"><button class="btn primary" data-act="closeModal">Resume</button><button class="btn" data-act="settings">Settings</button><button class="btn" data-act="controls">Controls</button><button class="btn ghost" data-act="leave">Leave match</button></div>`);
@@ -400,6 +410,7 @@ export class UI {
       ${tog('timing', 'Timing indicator')}
       ${tog('trail', 'Ball trail')}
       ${tog('highContrast', 'High contrast UI')}
+      <div class="setting"><span>Controls (keyboard, mouse, gamepad)</span><button class="btn small primary" data-act="controlsSettings">Configure…</button></div>
       <div class="setting"><span>Fullscreen</span><button class="btn small" data-act="fullscreen">Toggle</button></div>`);
     el.addEventListener('input', (e) => {
       const k = e.target.dataset.range;

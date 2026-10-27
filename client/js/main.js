@@ -7,10 +7,13 @@ import { settings, setSetting, onSetting } from './settings.js';
 import { Preview } from './preview.js';
 import { DEFAULT_LOOKS, sanitizeLook } from '/shared/looks.js';
 import { LocalMatch } from './local.js';
+import { InputManager, applyScheme, rebind, resetBindings, ACTIONS } from './input.js';
 import { DEFAULT_SETTINGS } from '/shared/constants.js';
 import { CAREER, starsFor, careerViewFrom, applyCareerResult } from '/shared/career.js';
 
 const net = new Net();
+const input = new InputManager(localStorage);
+input.attach();
 const world = new World(document.getElementById('gl'));
 const sound = new Sound();
 
@@ -150,6 +153,28 @@ function showCareer() {
   ui.career(careerView);
 }
 
+// ---------------------------------------------------------------- controls screen
+
+const ctrl = { device: 'keyboard', capture: null, raf: 0 };
+function openControls() {
+  const el = ui.controlsModal(input.settings, { device: ctrl.device, capture: ctrl.capture, padName: input.padName });
+  el.addEventListener('input', (e) => {
+    const k = e.target.dataset.ctrlRange;
+    if (k) { input.settings[k] = +e.target.value; input.save(); }
+  });
+  // live test of every action while the screen is open
+  cancelAnimationFrame(ctrl.raf);
+  const tick = () => {
+    const modal = document.getElementById('modal');
+    if (!modal || !modal.querySelector('[data-test]')) return;
+    modal.querySelectorAll('[data-test]').forEach((c) => c.classList.toggle('on', input.actionDown(c.dataset.test)));
+    ctrl.raf = requestAnimationFrame(tick);
+  };
+  ctrl.raf = requestAnimationFrame(tick);
+  ui.onModalClose = () => { input.cancelCapture(); ctrl.capture = null; cancelAnimationFrame(ctrl.raf); };
+}
+input.on('padchange', () => { if (document.querySelector('#modal [data-test]')) openControls(); });
+
 // ---------------------------------------------------------------- actions
 
 function act(name, d, el) {
@@ -182,6 +207,23 @@ function act(name, d, el) {
     }
     case 'previewMode': if (preview) { if (d.val === 'racket') preview.setRacket(myLook.racket); else preview.setCharacter(myLook, previewTeam); } break;
     case 'previewTeam': previewTeam ^= 1; if (preview && preview.mode === 'character') preview.setCharacter(myLook, previewTeam); break;
+    case 'controlsSettings': openControls(); break;
+    case 'scheme': applyScheme(input.settings, d.val); input.save(); openControls(); break;
+    case 'ctrlDevice': ctrl.device = d.val; ctrl.capture = null; input.cancelCapture(); openControls(); break;
+    case 'ctrlOpt': input.settings[d.key] = d.val === 'true'; if (d.key === 'mouseAim' && input.settings.scheme !== 'custom') input.settings.scheme = 'custom'; input.save(); openControls(); break;
+    case 'ctrlReset': resetBindings(input.settings, ctrl.device); input.settings.scheme = 'custom'; input.save(); openControls(); toast('Defaults restored'); break;
+    case 'rebind': {
+      ctrl.capture = d.action;
+      openControls();
+      input.capture((device, code) => {
+        const r = rebind(input.settings, device, d.action, code);
+        ctrl.capture = null;
+        input.save();
+        openControls();
+        toast(r.swappedWith ? `Swapped with "${r.swappedWith}"` : 'Binding saved');
+      }, ctrl.device);
+      break;
+    }
     case 'career': showCareer(); break;
     case 'careerPlay': startCareer(+d.stage); break;
     case 'careerNext': startCareer((lastResults?.career?.stage || 0) + 1); break;
@@ -320,7 +362,7 @@ net.on('start', (m) => {
   hud = ui.showHud(m.names, m.settings);
   world.setSingles(m.settings.mode === 'singles');
   match = new MatchClient({
-    net: m.local ? localProxy : net, world, hud, sound, start: m,
+    net: m.local ? localProxy : net, world, hud, sound, start: m, input,
     onPause: () => {
       if (ui.modal) { ui.closeModal(); match?.setPaused(false); local?.setPaused(false); } else { ui.pauseMenu(); match?.setPaused(true); local?.setPaused(true); }
     },
@@ -376,6 +418,8 @@ function loop(now) {
       slowWindows = 0;
     }
   }
+  input.gameActive = screen === 'game';
+  input.poll();
   if (match && screen === 'game') match.frame(dt, now);
   else if (screen !== 'results' && !window.__freeze) idle(dt);
   world.render(dt);
@@ -387,4 +431,4 @@ showHome();
 requestAnimationFrame(loop);
 
 // handy for debugging / automated checks
-window.__padel = { world, net, get local() { return local; }, get match() { return match; }, get room() { return room; } };
+window.__padel = { world, net, input, get local() { return local; }, get match() { return match; }, get room() { return room; } };
