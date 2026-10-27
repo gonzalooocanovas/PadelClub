@@ -45,7 +45,7 @@ export class UI {
 
   // ------------------------------------------------------------------ home
 
-  home({ name, profile, status, joinCode, level = 'easy', careerStars = null, court = 'indoor' }) {
+  home({ name, profile, status, joinCode, level = 'easy', careerStars = null, court = 'indoor', online = null }) {
     const lvl = profile?.level ?? 1;
     const xp = profile?.xp ?? 0;
     const into = xp - (lvl - 1) ** 2 * 100;
@@ -62,7 +62,8 @@ export class UI {
           </div>
         </div>
         <div class="menu">
-          <button class="btn primary" data-act="create" ${status !== 'online' ? 'disabled' : ''}>Play with friends <small>create private room</small></button>
+          <button class="btn primary" data-act="quick" ${status !== 'online' ? 'disabled' : ''}>Quick match <small id="onlineN">${online ? online + ' online' : 'find players now'}</small></button>
+          <button class="btn" data-act="create" ${status !== 'online' ? 'disabled' : ''}>Play with friends <small>create private room</small></button>
           <button class="btn" data-act="career">Career <small>${careerStars || 'seasons, rankings, training'}</small></button>
           <button class="btn" data-act="equipment">Equipment <small>player &amp; racket</small></button>
           <button class="btn" data-act="upgrades">Upgrades <small>speed, power, stamina…</small></button>
@@ -239,7 +240,7 @@ export class UI {
       },
       feedback(label, kind) {
         const f = $('#feedback'); if (!f || !settings.timing) return;
-        const nice = { perfect: 'Perfect', clean: 'Clean', good: 'Good', early: 'Early', late: 'Late', 'off-centre': 'Off-centre', poor: 'Poor contact', serve: 'Serve' }[label] || label;
+        const nice = { perfect: 'Perfect', clean: 'Clean', good: 'Good', early: 'Early', late: 'Late', 'off-centre': 'Off-centre', stretched: 'Stretched', poor: 'Poor contact', serve: 'Serve' }[label] || label;
         const shot = { lob: 'globo', vibora: 'víbora', chiquita: 'chiquita', drop: 'dejada', block: 'bloqueo', slice: 'slice', bandeja: 'bandeja', smash: 'remate', serve: 'saque' }[kind] || kind;
         f.textContent = `${nice} · ${shot}`;
         f.className = `feedback show ${label === 'perfect' ? 'perfect' : label === 'good' || label === 'clean' || label === 'serve' ? 'good' : 'bad'}`;
@@ -319,6 +320,16 @@ export class UI {
       ? '<p class="mute">No public rooms right now. Create one and set <b>Room visibility → Public</b> in the lobby.</p>'
       : `<table class="table"><tr><th>Host</th><th>Mode</th><th>Bots</th><th>Players</th><th></th></tr>${list.map((r) => `<tr><td>${esc(r.host)}</td><td>${r.mode === 'singles' ? '1 vs 1' : '2 vs 2'}</td><td>${BOT_LABELS[r.difficulty] || r.difficulty}</td><td>${r.players}/${r.max}</td><td><button class="btn small primary" data-act="joinRoom" data-code="${esc(r.code)}">Join</button></td></tr>`).join('')}</table>`;
     this.openModal(`<h2>Public rooms</h2>${rows}<div class="row" style="margin-top:12px"><button class="btn small" data-act="rooms">Refresh</button></div>`);
+  }
+
+  quickModal(m) {
+    const text = `<div class="qm"><div class="spin"></div><p style="font-size:18px;font-weight:700;margin:10px 0 4px">Looking for players…</p>
+      <p class="mute">${m.waiting ?? 1} in the queue · ${m.online ?? '?'} online</p>
+      <p class="mute" style="margin-top:6px">${m.botsIn > 0 ? `If nobody else joins, bots fill the empty seats in ${m.botsIn}s.` : 'Starting your match…'}</p></div>`;
+    const el = document.getElementById('qmBody');
+    if (el) { el.innerHTML = text; return; }
+    this.openModal(`<h2>Quick match</h2><div id="qmBody">${text}</div>`);
+    this.modal.querySelector('[data-act=closeModal]').textContent = 'Cancel';
   }
 
   historyModal(list, s) {

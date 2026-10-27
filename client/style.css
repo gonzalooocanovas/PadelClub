@@ -247,3 +247,7 @@ kbd { background: #0d141e; border: 1px solid var(--line); border-bottom-width: 2
 .chargebar div { margin-top: 5px; height: 10px; border-radius: 6px; background: rgba(255,255,255,.14); overflow: hidden; border: 1px solid rgba(255,255,255,.2); }
 .chargebar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), #ffc857, #ff6b5e); }
 .chargebar.full span { color: #ff6b5e; }
+
+.qm { text-align: center; padding: 10px 0; }
+.spin { width: 38px; height: 38px; margin: 0 auto; border: 4px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }

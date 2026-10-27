@@ -192,21 +192,60 @@ function serve(inp, game, p, os, skill, mem, dt) {
   mem.serveWaitExtra = undefined;
 }
 
+/**
+ * Doubles tactics, decided per player from the same information (so the pair agrees without talking):
+ *  'back'  both defend from the baseline (a lob is coming, or the opponents are attacking at the net)
+ *  'net'   both take the net together (the opponents are pinned at the back after our shot)
+ *  'mixed' one at the net, one at the baseline (the default)
+ * A stance is held for a moment so the pair does not flicker between them.
+ */
+function stanceFor(game, p, skill, mem) {
+  const r = game.rally, b = game.ball;
+  const opp = game.players.filter((o) => o.team !== p.team && o.active);
+  const oppDeep = opp.length > 0 && opp.every((o) => Math.abs(o.z) > 5.4);
+  const oppNet = opp.length > 0 && opp.every((o) => Math.abs(o.z) < 4.6);
+  const mine = r.lastTeam === p.team;
+  const onMySide = p.team === 0 ? b.z < 0.5 : b.z > -0.5;
+  let want = 'mixed';
+  if (r.serving || r.hits <= 1) want = 'mixed'; // the serve and the return keep the starting roles
+  else if (!mine && onMySide && (b.y > 2.6 || b.vy > 4)) want = 'back'; // a lob is coming: everybody back
+  else if (!mine && oppNet && skill.aggr < 0.6) want = 'back'; // they are attacking: defend together
+  else if (mine && oppDeep && skill.aggr >= 0.3 && b.y < 2.6) want = 'net'; // they are pinned back: take the net together
+  if (mem.stance && game.time - mem.stanceAt < 0.7) return mem.stance;
+  if (want !== mem.stance) { mem.stance = want; mem.stanceAt = game.time; }
+  return mem.stance;
+}
+
 function formation(inp, game, p, os, skill, mem) {
   const b = game.ball;
   if (game.singles) { moveTo(inp, p, clamp(b.x * 0.45, -2.4, 2.4), -os * ((skill.backZ ?? 7.6) - 0.1), skill, false); return; }
-  // whoever is already nearer the net holds it (the server's partner starts there), the other covers the back
   const partner = game.players[p.slot ^ 1];
   const dp = Math.abs(p.z), dq = Math.abs(partner.z);
+  const stance = mem ? stanceFor(game, p, skill, mem) : 'mixed';
+  if (stance !== 'mixed') {
+    // the pair moves as a unit: same depth, side by side, shifting toward the ball; each keeps their own side
+    const lower = p.x < partner.x || (p.x === partner.x && p.slot < partner.slot);
+    const centre = clamp(b.x * 0.45, -1.6, 1.6);
+    const tx = clamp(centre + (lower ? -1 : 1) * (stance === 'net' ? 1.9 : 2.5), -3.9, 3.9);
+    const tz = -os * (stance === 'net' ? (skill.netZ ?? 3.4) - 0.2 : (skill.backZ ?? 7.6));
+    mem.lastStance = stance;
+    moveTo(inp, p, tx, tz, skill, false);
+    return;
+  }
   // roles are fixed when the point starts (who is at the net, who holds the baseline) and only swap when the pair has
   // really changed ends (a lob chase): players no longer drift up to the net just because they hit the last ball
   let net = dp < dq || (dp === dq && p.slot % 2 === 0);
-  if (mem?.role) {
-    net = mem.role === 'net';
-    if (net && dp - dq > 2.8) net = false;
-    else if (!net && dq - dp > 2.8) net = true;
+  if (mem) {
+    if (mem.lastStance && mem.lastStance !== 'mixed') mem.role = dp < dq ? 'net' : 'back'; // coming out of a pair stance
+    mem.lastStance = 'mixed';
+    if (mem.role) {
+      net = mem.role === 'net';
+      if (net && dp - dq > 2.8) net = false;
+      else if (!net && dq - dp > 2.8) net = true;
+    }
   }
   const tz = -os * (net ? (skill.netZ ?? 3.4) : (skill.backZ ?? 7.6));
+  // the net player covers the middle against the opponents' hitter, the baseline player the ball side
   const off = net ? (p.team === 0 ? -1.3 : 1.3) : (p.team === 0 ? 1.3 : -1.3);
   const tx = clamp(b.x * 0.45 + off, -3.6, 3.6);
   moveTo(inp, p, tx, tz, skill, false);

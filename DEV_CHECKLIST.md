@@ -98,3 +98,9 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 - ✅ Livelier floor: restitution raised (0.85 indoor/night, 0.83 outdoor, 0.84 rooftop) and less loss on hard impacts, so the ball bounces higher and rallies use the walls more
 - ✅ Bot targets: in doubles bots now weigh the open space (net players count more), changing the direction of the ball and avoiding the dead centre, so they play cross-court and down the line instead of always back through the middle (landing spots in simulation are about 15% central, the rest spread to both sides)
 - Bot levels retuned again after the physics change (Legend 13/16 vs Pro, Pro 15/16 vs Club, Club 15/16 vs Rookie; aces 2–9%)
+
+## Quick match, pressure, lobs, positioning (latest pass)
+- ✅ Quick match: a button on the home screen puts you in a queue; four players are matched into a doubles game, and after 10 s anyone still waiting plays with bots filling the empty seats. Shows the queue size and how many players are online (also shown on the home button, refreshed every second); cancellable. Server module server/quick.js, tested with real WebSocket clients and with a fake clock. The first two players matched are team-mates
+- ✅ Pressure on contact (everyone: bots, humans, online): a ball reached at full stretch, hit with great pace, or taken on the run is answered with a weaker, shorter, less accurate shot ("Stretched" label), so a good volley or placed ball wins the exchange. A poorly struck ball also carries less pace and falls shorter
+- ✅ Lobs: quality depends on contact. A clean lob climbs high and lands deep; a poor one is low and short (about 2.2+ m apex), easy to smash
+- ✅ Doubles positioning: bots choose a stance (both back when a lob comes or the rivals attack, both at the net when the rivals are pinned back, otherwise one up one back), move as a pair keeping their width, and shift toward the ball

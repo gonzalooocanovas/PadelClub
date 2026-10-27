@@ -229,6 +229,7 @@ export class PadelGame {
     const d = Math.hypot(dx, dz);
     if (d <= 1.1 || d > 2.7 || b.y > 3.2) return;
     const step = Math.min(d - 1.1, 5.5 * dt);
+    p.swing.lunged = (p.swing.lunged || 0) + step;
     const nx = p.x + (dx / d) * step;
     p.x = p.pit && Math.abs(p.x) > COURT.HALF_W // out in the strip beside the court
       ? Math.sign(nx) * clamp(Math.abs(nx), COURT.HALF_W + 0.4, COURT.HALF_W + COURT.PIT.w - 0.4)
@@ -315,6 +316,8 @@ export class PadelGame {
       case 'block': speed = 9.5; depth = clamp(depth, 4, 8); sb = 3; break;
       default: depth = clamp(depth, 3, 9.2);
     }
+    if (kind !== 'serve') speed *= 0.8 + 0.2 * q; // a poorly struck ball carries less pace
+    if (['forehand', 'backhand', 'slice', 'volley', 'block'].includes(kind)) depth = Math.max(2.5, depth - (1 - q) * 3.5); // and falls short
     if (spinOv) { sb = spinOv.sb; ss = spinOv.ss || 0; }
     if (ctx) {
       sb += ctx.face * 5; // spin transfer from the face angle
@@ -325,6 +328,10 @@ export class PadelGame {
     }
     const spinQ = 0.4 + 0.6 * q; // mishit balls carry less spin
     sb *= spinQ; ss *= spinQ;
+    // A lob is only as good as the contact: a clean one climbs high and lands deep (hard to attack); a poor one is low and
+    // short, an invitation to smash
+    const lobQ = kind === 'lob' ? clamp(q, 0.3, 1) : 1;
+    if (kind === 'lob') depth = clamp(depth - (1 - lobQ) * 5.0, 4.2, 9.3);
     let tz = os * depth;
     let err = (1 - q) * (kind === 'serve' ? 1.4 : 1.7);
     if (kind === 'serve') err *= 1 + 3 * Math.max(0, (this._servePace || 1) - 1); // all-out power costs accuracy
@@ -333,7 +340,7 @@ export class PadelGame {
     tz += (this.rng() - 0.5) * 2 * err * 0.8;
     const dist = Math.hypot(tx - b.x, tz - b.z);
     let T = kind === 'lob'
-      ? clamp(1.5 + dist * 0.05, 1.7, 2.4)
+      ? clamp(1.5 + dist * 0.05, 1.7, 2.4) * (0.7 + 0.3 * lobQ)
       : dist / (speed * (0.8 + 0.4 * q + Math.min(0.2, inSpeed * 0.007))); // returns carry some of the incoming pace
     if (ctx && kind !== 'lob' && kind !== 'serve') T *= 1 + 0.16 * ctx.face; // open face = higher, slower arc
     T = Math.max(T, 0.28);
@@ -442,6 +449,14 @@ export class PadelGame {
     q = clamp(q * 0.8 + 0.2, 0.3, 1); // forgiving: contact is never worse than "late"
     const tiredK = clamp((PLAYER.TIRED_FROM - p.stamina) / PLAYER.TIRED_FROM, 0, 1);
     q = clamp(q - 0.25 * tiredK, 0.3, 1); // exhausted players mistime and mishit
+    // Pressure: a ball that was hard to reach (stretched to the limit, hit with pace, on the run) cannot be answered with a great shot.
+    // This is what makes a good volley or a well-placed ball actually win the exchange. Same rule for bots, humans and online.
+    const inSpeed0 = Math.hypot(b.vx, b.vy, b.vz);
+    const stretch = clamp((d + 0.8 * (p.swing.lunged || 0) - 1.25) / 0.55, 0, 1); // reach plus the last-gasp lunge toward the ball
+    const rush = clamp((inSpeed0 - 14) / 14, 0, 1);
+    const onRun = clamp((Math.hypot(p.vx, p.vz) - 4) / 3, 0, 1);
+    const pressure = 0.3 * stretch + 0.22 * rush + 0.08 * onRun;
+    q = clamp(q - pressure, 0.3, 1);
     if (p.slot === 0 && this.mods) { // development bonus for the matching skill, kept small
       const grp = { forehand: 'ground', backhand: 'ground', volley: 'volley', smash: 'smash', bandeja: 'smash', vibora: 'smash', lob: 'lob', slice: 'defense', block: 'defense', chiquita: 'defense', drop: 'defense' }[kind];
       q = clamp(q + (this.mods.q[grp] || 0), 0.3, 1);
@@ -457,6 +472,7 @@ export class PadelGame {
 
     let label;
     if (q < 0.4) label = 'poor';
+    else if (pressure >= 0.28 && q < 0.75) label = 'stretched';
     else if (e > 0.55) label = 'off-centre';
     else if (q >= 0.82) label = 'perfect';
     else if (q >= 0.62) label = 'clean';

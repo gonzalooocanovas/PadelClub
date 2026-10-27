@@ -1,5 +1,6 @@
 // HTTP static server + WebSocket game server.
 
+import { QuickQueue } from './quick.js';
 import http from 'node:http';
 import zlib from 'node:zlib';
 import fs from 'node:fs';
@@ -62,6 +63,8 @@ function serveStatic(req, res) {
 export function createGameServer({ port = 0, dataDir = process.env.DATA_DIR || path.join(ROOT, 'data'), host } = {}) {
   const store = new Store(dataDir);
   const rooms = new RoomManager(store);
+  const quick = new QuickQueue(rooms);
+  const onlineCount = () => { let n = 0; for (const ws of wss.clients) if (ws.readyState === 1 && ws.ctx?.token) n++; return n; };
   const server = http.createServer((req, res) => {
     try { serveStatic(req, res); } catch (err) {
       console.error('[http]', err.message);
@@ -86,6 +89,7 @@ export function createGameServer({ port = 0, dataDir = process.env.DATA_DIR || p
   function onClose(ws) {
     const { token } = ws.ctx;
     if (!token) return;
+    quick.remove(token);
     const ms = rooms.membership(token);
     if (ms && ms.member.ws === ws) ms.room.disconnect(ms.member);
   }
@@ -108,7 +112,7 @@ export function createGameServer({ port = 0, dataDir = process.env.DATA_DIR || p
       c.token = token;
       c.name = prof.name;
       c.look = msg.look ? sanitizeLook(msg.look) : null;
-      send(ws, { t: 'welcome', token, name: prof.name, profile: store.publicProfile(token) });
+      send(ws, { t: 'welcome', token, name: prof.name, profile: store.publicProfile(token), online: onlineCount() });
       const ms = rooms.membership(token);
       if (ms) {
         // reconnect: rebind the new socket to the old seat
@@ -139,6 +143,11 @@ export function createGameServer({ port = 0, dataDir = process.env.DATA_DIR || p
       if (lm) { lm.member.look = c.look; lm.room.broadcastRoom(); }
       return;
     }
+    if (msg.t === 'quick') {
+      quick.add({ token: c.token, name: msg.name || c.name, ws, look: c.look });
+      return send(ws, { t: 'queue', ...quick.status(c.token), online: onlineCount() });
+    }
+    if (msg.t === 'quickCancel') { quick.remove(c.token); return send(ws, { t: 'queue', cancelled: true, online: onlineCount() }); }
     if (msg.t === 'rooms') return send(ws, { t: 'rooms', rooms: rooms.listPublic() });
     if (msg.t === 'career') return send(ws, { t: 'career', career: store.careerView(c.token) });
     if (msg.t === 'careerStart') {
@@ -204,6 +213,16 @@ export function createGameServer({ port = 0, dataDir = process.env.DATA_DIR || p
     while (acc >= STEP) { rooms.step(STEP); acc -= STEP; }
   }, 8);
   const sweeper = setInterval(() => rooms.sweep(), 30_000);
+  // matchmaking and the live player count
+  const matchmaker = setInterval(() => {
+    quick.tick();
+    const online = onlineCount();
+    for (const ws of wss.clients) {
+      if (ws.readyState !== 1 || !ws.ctx?.token) continue;
+      const st = quick.status(ws.ctx.token);
+      send(ws, st ? { t: 'queue', ...st, online } : { t: 'online', n: online });
+    }
+  }, 1000);
   const heartbeat = setInterval(() => {
     for (const ws of wss.clients) {
       if (!ws.alive) { ws.terminate(); continue; }
@@ -218,7 +237,7 @@ export function createGameServer({ port = 0, dataDir = process.env.DATA_DIR || p
       resolve({
         port: actual, rooms, store, server, wss,
         async close() {
-          clearInterval(loop); clearInterval(sweeper); clearInterval(heartbeat);
+          clearInterval(loop); clearInterval(sweeper); clearInterval(matchmaker); clearInterval(heartbeat);
           for (const ws of wss.clients) ws.terminate();
           store.flush();
           await new Promise((r) => wss.close(() => server.close(() => r())));

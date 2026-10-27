@@ -30,6 +30,8 @@ let hud = null;
 let profile = null;
 let screen = 'home'; // home | lobby | game | results
 let selected = null; // host: member being moved
+let onlineN = null; // players connected right now (from the server)
+let queued = false; // searching for a quick match
 let practicePending = false;
 let rematchVotes = [];
 let lastResults = null;
@@ -86,7 +88,7 @@ function showHome() {
   world.setLooks([myLook, ...DEFAULT_LOOKS.slice(1)]);
   const cs = loadCareer();
   world.setZone(null);
-  ui.home({ name: net.name, profile, status: net.status, joinCode: autoJoin || '', level, court, careerStars: cs.stats.matches ? `Season ${cs.season} · rank #${rankOf(cs.points)}` : null });
+  ui.home({ name: net.name, profile, status: net.status, joinCode: autoJoin || '', level, court, online: onlineN, careerStars: cs.stats.matches ? `Season ${cs.season} · rank #${rankOf(cs.points)}` : null });
 }
 
 function lobbyReason() {
@@ -307,6 +309,12 @@ function act(name, d, el) {
   switch (name) {
     case 'rename': net.send({ t: 'rename', name: val('nameInput') }); break;
     case 'create': net.send({ t: 'create', name: myName() }); break;
+    case 'quick':
+      queued = true;
+      net.send({ t: 'quick', name: myName() });
+      ui.quickModal({ waiting: 1, online: onlineN, botsIn: 10 });
+      ui.onModalClose = () => { if (queued) { queued = false; net.send({ t: 'quickCancel' }); } };
+      break;
     case 'level':
       level = d.val;
       try { localStorage.setItem('padel.level', level); } catch { /* optional */ }
@@ -455,6 +463,7 @@ net.on('status', () => {
 net.on('disconnected', () => { if (!local) hud?.connection(false); });
 net.on('welcome', (m) => {
   profile = m.profile;
+  if (Number.isFinite(m.online)) onlineN = m.online;
   hud?.connection(true);
   if (screen === 'home' && document.activeElement?.id !== 'nameInput') showHome();
   if (autoJoin && !room) {
@@ -478,6 +487,18 @@ net.on('left', () => {
 });
 net.on('drillStatus', (m) => { hud?.setDrill(m.text); world.setZone(m.zone || null); });
 net.on('drillResults', onDrillResults);
+function setOnline(n) {
+  if (!Number.isFinite(n)) return;
+  onlineN = n;
+  const el = document.getElementById('onlineN');
+  if (el) el.textContent = `${n} online`;
+}
+net.on('online', (m) => setOnline(m.n));
+net.on('queue', (m) => {
+  setOnline(m.online);
+  if (m.cancelled || !queued) return;
+  ui.quickModal(m);
+});
 net.on('rooms', (m) => { if (document.getElementById('modal')) ui.roomsModal(m.rooms); });
 
 net.on('room', (m) => {
@@ -499,6 +520,7 @@ net.on('room', (m) => {
 });
 
 net.on('start', (m) => {
+  queued = false;
   if (match) match.stop();
   ui.clear();
   world.setCourt(m.settings.court || 'indoor');
