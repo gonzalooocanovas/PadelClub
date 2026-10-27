@@ -241,3 +241,9 @@ kbd { background: #0d141e; border: 1px solid var(--line); border-bottom-width: 2
 
 #stam.tired { background: #ffc857; }
 #stam.spent { background: var(--bad); animation: svpulse .8s ease-in-out infinite; }
+
+.chargebar { position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); width: 260px; text-align: center; }
+.chargebar span { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--mute); }
+.chargebar div { margin-top: 5px; height: 10px; border-radius: 6px; background: rgba(255,255,255,.14); overflow: hidden; border: 1px solid rgba(255,255,255,.2); }
+.chargebar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), #ffc857, #ff6b5e); }
+.chargebar.full span { color: #ff6b5e; }

@@ -85,3 +85,10 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 ## Upgrades and fatigue
 - ✅ Fatigue: stamina drains 1.5/s while the ball is in play even if you stand still (sprinting costs extra) and only recovers between points, so long points wear you down. Below 45 stamina you run up to 18% slower, hit with less accuracy and pace, and serve less accurately (everyone, bots too, online as well). The bar turns amber (tired) and red (exhausted). Bug fixed on the way: players did not recover stamina between points before
 - ✅ Upgrades: 10 attributes (new Power; Speed +1.5% per level, Stamina = slower fatigue and faster recovery, plus accuracy, spin, reaction…), up to level 10 (about +15%). Available from the Upgrades button on the home screen and the Career > Development tab; they apply to every solo match and never online. Points come from career wins/titles, drills, objectives and practice wins against Club, Pro and Legend bots (+1/+2/+3; nothing against Rookies)
+
+## Serves and aces (latest pass)
+- ✅ Bug fixed: bots lost the target they chose when they started a swing (their later inputs were blank), so every bot shot, serves included, went to the default spot (short serves = many aces). They now keep the aim until contact
+- ✅ Bot receivers anticipate: they go to the first point of the ball's flight they can actually reach (including after a wall rebound). Aces in bot-vs-bot play dropped from 13–26% to 0–3%
+- ✅ Bots wait longer before serving (2+ s, random) so receivers are set, serve with less than full pace and avoid the extreme corners every time
+- ✅ Serve: the bounce of the ball in the server's hand is slower (1.1 s per bounce instead of 0.8), and holding the hit key charges serve power (tap = normal, full charge 0.9 s = +22% pace but a less accurate serve); the serve is struck when you release
+- ✅ Bot levels retuned after these changes (Legend 9/12 vs Pro, Pro 10/12 vs Club, Club 10/12 vs Rookie in simulation)

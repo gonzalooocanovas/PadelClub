@@ -51,6 +51,7 @@ export class MatchClient {
     this.me = { x: 0, z: 0, vx: 0, vz: 0, stamina: 100, team: this.team, xLim: start.settings.mode === 'singles' ? 3.25 : PLAYER.MAX_X, pit: start.settings.mode !== 'singles' && start.settings.openings !== false };
     const mods = start.settings.attrMods; // upgrades of a solo match: the prediction must use the same numbers as the game
     if (mods && start.slot === 0) Object.assign(this.me, { speedMul: mods.runMul, regenMul: mods.regenMul, drainMul: mods.drainMul || 1 });
+    this.charge = null;
     this.pending = [];
     this.seq = 0;
     this.acc = 0;
@@ -80,15 +81,17 @@ export class MatchClient {
 
   bind() {
     const i = this.input;
-    const hit = (lob, mod) => () => {
+    const hit = (lob, mod, action) => () => {
       if (this.paused) return;
       this.sound.unlock();
+      // serve: holding the key charges power and the serve is hit when you let go (a quick tap is a normal serve)
+      if (this.phase === 'serve' && this.slot === this.serverSlot && !this.charge) { this.charge = { t: 0, lob, mod, action }; return; }
       this.want.swing = true; this.want.lob = lob;
       if (mod) this.want.mod = mod;
     };
     this.unsubs = [
-      i.on('hit', hit(false, 0)), i.on('lob', hit(true, 0)),
-      i.on('slice', hit(false, 3)), i.on('soft', hit(false, 1)), i.on('control', hit(false, 2)),
+      i.on('hit', hit(false, 0, 'hit')), i.on('lob', hit(true, 0, 'lob')),
+      i.on('slice', hit(false, 3, 'slice')), i.on('soft', hit(false, 1, 'soft')), i.on('control', hit(false, 2, 'control')),
       i.on('jump', () => { if (!this.paused) this.want.jump = true; }),
       i.on('pause', () => { if (this.replay) this.endReplay(); else this.onPause?.(); }),
       i.on('hit', () => { if (this.replay) this.endReplay(); }),
@@ -239,6 +242,21 @@ export class MatchClient {
     this.aim.set(this.kbAim.x, 0.03, this.kbAim.z);
   }
 
+  /** Serve power: hold to charge (0.9 s to full), release to hit. */
+  updateCharge(dt) {
+    const c = this.charge;
+    if (!c) { this.hud.charge(null); return; }
+    if (this.phase !== 'serve' || this.slot !== this.serverSlot) { this.charge = null; this.hud.charge(null); return; }
+    c.t += dt;
+    const f = clamp(c.t / 0.9, 0, 1);
+    this.hud.charge(f);
+    if (!this.input.actionDown(c.action)) {
+      this.want.swing = true; this.want.lob = c.lob; if (c.mod) this.want.mod = c.mod;
+      this.want.pace = 0.9 + 0.22 * f; // a tap is a normal serve, a full charge is +22% pace but less accurate
+      this.charge = null; this.hud.charge(null);
+    }
+  }
+
   buildInput() {
     const { mx, mz } = this.moveAxes();
     const i = this.input;
@@ -247,12 +265,12 @@ export class MatchClient {
     const inp = {
       seq: ++this.seq, mx, mz, sprint: i.actionDown('sprint'),
       ax: +this.aim.x.toFixed(2), az: +this.aim.z.toFixed(2), mod,
-      swing: this.want.swing, lob: this.want.lob, jump: this.want.jump,
+      swing: this.want.swing, lob: this.want.lob, jump: this.want.jump, pace: this.want.swing ? this.want.pace : undefined,
       // keyboard steering is resolved by the server at contact; a mouse or right-stick target is sent as an explicit point
       steer: this.aimSource === 'steer',
     };
     if (this.want.swing && !this.swingLocal) this.swingLocal = { t: 0, kind: this.guessKind(inp) };
-    this.want.swing = false; this.want.jump = false; this.want.mod = 0;
+    this.want.swing = false; this.want.jump = false; this.want.mod = 0; this.want.pace = undefined;
     return inp;
   }
 
@@ -410,6 +428,8 @@ export class MatchClient {
     if (this.replay) { this.playReplay(dt); return; }
     if (this.paused && this.local) return; // solo match paused: everything stands still
     this.updateAim(dt);
+
+    this.updateCharge(dt);
 
     // fixed-step local input + prediction
     this.acc += dt;

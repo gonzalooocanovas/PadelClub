@@ -179,13 +179,14 @@ export class UI {
         <div class="topright"><span id="clock">0:00</span><span class="status"><span class="dot" id="pingDot"></span><span id="ping">– ms</span></span></div>
         <div class="drillbar hidden" id="drillbar"></div>
         <div class="rallychip hidden" id="rally"></div>
+        <div class="chargebar hidden" id="charge"><span>Serve power</span><div><i></i></div></div>
         <div class="banner" id="banner"><div class="big"></div><div class="sub"></div></div>
         <div class="feedback" id="feedback"></div>
         <div class="timing hidden" id="timing"><i class="t-out"></i><i class="t-in"></i><span></span></div>
         <div class="chatfeed" id="feed"></div>
         <div class="bottomleft">
           <div class="label" id="stamLabel">Stamina</div><div class="bar" style="margin-top:6px"><i id="stam" style="width:100%"></i></div>
-          <div class="keys" id="keys">WASD or arrows move · Shift sprint · X jump<br><b>Space hit</b> · G globo · R slice<br>Q soft / víbora · E bandeja / block · M mouse aim<br>Hold a direction as you hit: that is where the ball goes<br><br>Tab stats · Esc menu · 1–4 quick chat</div>
+          <div class="keys" id="keys">WASD or arrows move · Shift sprint · X jump<br><b>Space hit</b> (serve: hold to add power, release to hit) · G globo · R slice<br>Q soft / víbora · E bandeja / block · M mouse aim<br>Hold a direction as you hit: that is where the ball goes<br><br>Tab stats · Esc menu · 1–4 quick chat</div>
         </div>
         <div class="statsov hidden" id="statsov"><div class="panel modal" id="statsbody"></div></div>
         <div class="reconnect hidden" id="recon">Connection lost — reconnecting…</div>
@@ -269,6 +270,7 @@ export class UI {
         t.querySelector('.t-out').style.width = t.querySelector('.t-out').style.height = `${outPx * 2}px`;
         t.querySelector('span').textContent = text;
       },
+      charge(f) { const c = $('#charge'); if (!c) return; if (f === null) { c.classList.add('hidden'); return; } c.classList.remove('hidden'); const i = c.querySelector('i'); i.style.width = `${f * 100}%`; c.classList.toggle('full', f >= 0.98); },
       rally(n) { const r = $('#rally'); if (!r) return; if (!n) { r.classList.add('hidden'); return; } r.innerHTML = `<small>Rally</small><b>${n}</b><small>${n === 1 ? 'shot' : 'shots'}</small>`; r.classList.remove('hidden'); r.classList.toggle('long', n >= 10); },
       setDrill(text) { const d = $('#drillbar'); if (!d) return; d.classList.toggle('hidden', !text); d.textContent = text || ''; },
       connection(ok) { $('#recon')?.classList.toggle('hidden', ok); },
@@ -387,7 +389,7 @@ export class UI {
       <div class="kv">
         <span class="k">W A S D / Arrows</span><span>Move (both work). The camera follows you, so W always runs toward the net.</span>
         <span class="k">Aim</span><span>While you swing you are planted, and the direction you hold at the moment of contact is where the ball goes: left/right = that side, up = deep, down = short. With no direction it picks the open side. With mouse aim on (Settings, the pause menu or the M key) the target ring follows the cursor and left click hits (right click = globo).</span>
-        <span class="k">Space</span><span><b>Hit</b>. To serve, the ball bounces in your hand: hit it as it rises to waist height (the lower and higher you hit it, the less accurate). R = slice serve, Q = kick serve; hold a direction to aim it. A circle closes in on the ball: press Space when it touches the small inner ring. Green = PERFECT, white = GOOD, red = LATE. Mouse left-click does the same.</span>
+        <span class="k">Space</span><span><b>Hit</b>. To serve, the ball bounces in your hand (slowly): HOLD Space to charge power and release to hit (a tap is a normal serve, a full charge is +22% pace but less accurate); hit it as it rises to waist height (the lower and higher you hit it, the less accurate). R = slice serve, Q = kick serve; hold a direction to aim it. A circle closes in on the ball: press Space when it touches the small inner ring. Green = PERFECT, white = GOOD, red = LATE. Mouse left-click does the same.</span>
         <span class="k">R</span><span>Hits a slice (press it instead of Space): backspin that skids low and slow off the floor and glass.</span>
         <span class="k">Q</span><span>Hits a soft shot: chiquita near the net, dejada (drop shot) from deep, <b>víbora</b> (sidespin) on overheads.</span>
         <span class="k">E</span><span>Hits a controlled shot: block on low balls, <b>bandeja</b> (backspin, placed deep) on overheads.</span>

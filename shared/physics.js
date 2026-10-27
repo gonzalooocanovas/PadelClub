@@ -86,9 +86,10 @@ export function wallE(speed, y) {
   return y > 3 ? e * 0.55 : e;
 }
 
-/** Height of the ball the server bounces by hand at game time t (period 0.8 s). */
+export const SERVE_BOUNCE_PERIOD = 1.1; // seconds per bounce of the ball in the server's hand (slower than before: easier to time)
+/** Height of the ball the server bounces by hand at game time t. */
 export function serveBallHeight(t) {
-  const ph = (t % 0.8) / 0.8;
+  const ph = (t % SERVE_BOUNCE_PERIOD) / SERVE_BOUNCE_PERIOD;
   return 0.1 + 0.86 * Math.abs(Math.cos(Math.PI * ph));
 }
 

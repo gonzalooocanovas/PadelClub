@@ -123,8 +123,9 @@ export class PadelGame {
       sprint: !!inp.sprint, steer: !!inp.steer,
       ax: clamp(+inp.ax || 0, -20, 20), az: clamp(+inp.az || 0, -20, 20),
       mod: inp.mod === 1 || inp.mod === 2 || inp.mod === 3 ? inp.mod : 0, lob: !!inp.lob,
+      keep: !!inp.keep, // bots decide their target when they start the swing and keep it until contact
     };
-    if (inp.swing) p.wantSwing = { ax: p.input.ax, az: p.input.az, mod: p.input.mod, lob: p.input.lob };
+    if (inp.swing) p.wantSwing = { ax: p.input.ax, az: p.input.az, mod: p.input.mod, lob: p.input.lob, pace: clamp(+inp.pace || 1, 0.6, 1.15) };
     if (inp.jump) p.wantJump = true;
   }
 
@@ -209,6 +210,7 @@ export class PadelGame {
    */
   aimFor(p) {
     const inp = p.input, os = p.team === 0 ? 1 : -1;
+    if (inp.keep && p.swing) return { ax: p.swing.ax, az: p.swing.az };
     let ax = inp.ax, az = inp.az;
     if (inp.steer) {
       if (Math.abs(inp.mx) > 0.25) ax = Math.sign(inp.mx) * 3.4;
@@ -273,7 +275,7 @@ export class PadelGame {
 
   startSwing(p, sw) {
     if (this.phase === 'serve' && p.slot !== this.serverSlot) return;
-    p.swing = { t: 0, done: false, ax: sw.ax, az: sw.az, mod: sw.mod, lob: sw.lob };
+    p.swing = { t: 0, done: false, ax: sw.ax, az: sw.az, mod: sw.mod, lob: sw.lob, pace: sw.pace || 1 };
     p.kind = SHOT_IDS.indexOf(this.phase === 'serve' ? 'serve' : this.classify(p, sw));
   }
 
@@ -296,7 +298,7 @@ export class PadelGame {
     let speed = 19;
     let sb = 0, ss = 0; // backspin(+)/topspin(-), sidespin
     switch (kind) {
-      case 'serve': speed = 9.5 + 5 * q; depth = clamp(Math.abs(aimZ), 2.5, 6.3); sb = 4; break;
+      case 'serve': speed = (9.5 + 5 * q) * (this._servePace || 1); depth = clamp(Math.abs(aimZ), 2.5, 6.3); sb = 4; break;
       case 'forehand': sb = -9; depth = clamp(depth, 3, 9.2); break; // topspin drive
       case 'backhand': sb = -6; depth = clamp(depth, 3, 9.2); break;
       case 'slice': speed = 13.5; sb = 17; depth = clamp(depth, 3, 9.2); break; // skidding backspin
@@ -325,6 +327,7 @@ export class PadelGame {
     sb *= spinQ; ss *= spinQ;
     let tz = os * depth;
     let err = (1 - q) * (kind === 'serve' ? 1.4 : 1.7);
+    if (kind === 'serve') err *= 1 + 3 * Math.max(0, (this._servePace || 1) - 1); // all-out power costs accuracy
     if (ctx) err *= 1 + 0.8 * clamp((ctx.e - 0.4) / 0.45, 0, 1) + 0.05 * ctx.lateral; // edge hits and sideways running are less reliable
     tx += (this.rng() - 0.5) * 2 * err;
     tz += (this.rng() - 0.5) * 2 * err * 0.8;
@@ -400,6 +403,7 @@ export class PadelGame {
     const tiredK = clamp((PLAYER.TIRED_FROM - p.stamina) / PLAYER.TIRED_FROM, 0, 1);
     const q = clamp(1.02 - Math.abs(b.y - 0.62) / 0.3 - 0.2 * tiredK, 0.3, 0.98); // best at waist height; the window is narrow, and a tired server is less accurate
     const spinOv = sw.mod === 3 ? { sb: 15 } : sw.mod === 1 ? { sb: -9 } : null; // R = slice serve, Q = kick serve
+    this._servePace = sw.pace || 1; // bots serve a little softer; humans choose by holding the key (charge) and releasing
     const v = this.planShot('serve', b, os, clamp(ax, lo, hi), os * clamp(Math.abs(aim.az), 2.5, 6.3), q, 0, spinOv);
     b.vx = v.vx; b.vy = v.vy; b.vz = v.vz; b.sb = v.sb; b.ss = v.ss;
     this.phase = 'rally';

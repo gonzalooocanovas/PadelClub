@@ -15,10 +15,10 @@ const SKILL = {
   // speed: top speed factor · react: seconds before reacting · noise: aim scatter · reach: swing distance
   // flub: chance to miss a ball outright · aggr: willingness to attack · lob/slice/smash: shot mix
   // serveSpin: chance of a spin serve · serveTiming: waits for the ideal bounce height · plan: replanning interval
-  easy: { speed: 0.9, sprint: true, react: 0.3, noise: 2.0, reach: 1.9, flub: 0.24, timingErr: 0.24, aggr: 0.12, lob: 0.35, slice: 0.08, smash: 0.35, serveSpin: 0, serveTiming: false, serveWindow: 0.45, serveRisk: 0.0, plan: 0.12 },
-  normal: { speed: 0.96, sprint: true, react: 0.18, noise: 1.1, reach: 2.0, flub: 0.14, timingErr: 0.14, aggr: 0.3, lob: 0.45, slice: 0.18, smash: 0.5, serveSpin: 0.15, serveTiming: false, serveWindow: 0.25, serveRisk: 0.3, plan: 0.1 },
-  hard: { speed: 1.0, sprint: true, react: 0.09, noise: 0.55, reach: 2.15, flub: 0.1, timingErr: 0.07, aggr: 0.5, lob: 0.5, slice: 0.25, smash: 0.7, serveSpin: 0.4, serveTiming: true, serveWindow: 0.12, serveRisk: 0.6, plan: 0.07 },
-  expert: { speed: 1.04, sprint: true, react: 0.04, noise: 0.25, reach: 2.3, flub: 0.04, timingErr: 0.03, aggr: 0.75, lob: 0.55, slice: 0.3, smash: 0.85, serveSpin: 0.6, serveTiming: true, serveWindow: 0.05, serveRisk: 0.85, plan: 0.05 },
+  easy: { speed: 0.9, sprint: true, react: 0.3, noise: 2.0, reach: 1.9, flub: 0.24, timingErr: 0.24, aggr: 0.12, lob: 0.35, slice: 0.08, smash: 0.35, serveSpin: 0, serveTiming: false, serveWindow: 0.45, servePace: 0.68, serveRisk: 0.0, plan: 0.12 },
+  normal: { speed: 0.96, sprint: true, react: 0.18, noise: 1.2, reach: 2.0, flub: 0.16, timingErr: 0.14, aggr: 0.3, lob: 0.45, slice: 0.18, smash: 0.5, serveSpin: 0.15, serveTiming: false, serveWindow: 0.25, servePace: 0.72, serveRisk: 0.3, plan: 0.1 },
+  hard: { speed: 0.97, sprint: true, react: 0.09, noise: 0.55, reach: 2.15, flub: 0.1, timingErr: 0.07, aggr: 0.5, lob: 0.5, slice: 0.25, smash: 0.7, serveSpin: 0.4, serveTiming: true, serveWindow: 0.12, servePace: 0.76, serveRisk: 0.6, plan: 0.07 },
+  expert: { speed: 1.09, sprint: true, react: 0.04, noise: 0.2, reach: 2.35, flub: 0.025, timingErr: 0.03, aggr: 0.75, lob: 0.55, slice: 0.3, smash: 0.85, serveSpin: 0.6, serveTiming: true, serveWindow: 0.05, servePace: 0.8, serveRisk: 0.85, plan: 0.05 },
 };
 
 const skillCache = new Map();
@@ -48,7 +48,7 @@ export function makeBotMemory() {
   return { serveT: 0, plan: null, planAge: 99, react: 0, lastTeam: -1, flub: false };
 }
 
-const blank = () => ({ mx: 0, mz: 0, sprint: false, swing: false, jump: false, ax: 0, az: 0, mod: 0, lob: false });
+const blank = () => ({ mx: 0, mz: 0, sprint: false, swing: false, jump: false, ax: 0, az: 0, mod: 0, lob: false, keep: true });
 
 function moveTo(inp, p, tx, tz, skill, allowSprint) {
   const dx = tx - p.x, dz = tz - p.z;
@@ -99,14 +99,20 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
       const samples = predictBall(b, 3.0);
       let pick = null;
       let bounced = r.bounces >= 1;
+      let first = null; // earliest playable point, used when nothing is reachable in time
+      const canReach = (s) => Math.hypot(s.x - p.x, s.z - p.z) <= 0.6 + skill.speed * 6.4 * Math.max(0, s.t - mem.react);
       for (const s of samples) {
         if (s.floor) bounced = true;
         const mine = p.team === 0 ? s.z < -0.4 : s.z > 0.4;
-        // groundstrokes after the bounce; volleys only in the net zone
         // overhead: a high ball falling in my half before it bounces is attacked (smash / bandeja) by players who dare
-        if (mine && !bounced && s.vy < 0 && s.y < 2.45 && s.y > 1.95 && Math.abs(s.z) < 7 && rnd() < 0.25 + skill.smash * 0.75) { pick = s; break; }
-        if (mine && s.y < 1.7 && s.vy <= 0.5 && (bounced || Math.abs(s.z) < 4.2)) { pick = s; break; }
+        const overhead = mine && !bounced && s.vy < 0 && s.y < 2.45 && s.y > 1.95 && Math.abs(s.z) < 7 && rnd() < 0.25 + skill.smash * 0.75;
+        // groundstrokes after the bounce (also off the back wall); volleys only in the net zone
+        const ground = mine && s.y < 1.7 && s.vy <= (bounced ? 2.0 : 0.5) && (bounced || Math.abs(s.z) < 4.2);
+        if (!overhead && !ground) continue;
+        first = first || s;
+        if (canReach(s)) { pick = s; break; } // anticipation: go to the first point that can actually be reached, even after a wall rebound
       }
+      pick = pick || first;
       mem.plan = pick || null;
     }
     const partner = game.players[slot ^ 1];
@@ -165,7 +171,8 @@ function swingNow(b, dx, dz, dist, mem) {
 function serve(inp, game, p, os, skill, mem, dt) {
   const rnd = game.rng;
   mem.serveT += dt;
-  if (mem.serveT < 1.1 + skill.react * 2 || game.serveWait > 0) return;
+  if (mem.serveWaitExtra === undefined) mem.serveWaitExtra = rnd() * 0.9;
+  if (mem.serveT < 2.0 + skill.react * 2 + mem.serveWaitExtra || game.serveWait > 0) return; // give the receivers time to get set: no rushed serves
   const y = game.ball.y;
   // the racket meets the ball about 0.05 s after the press: judge the height then. Better levels wait for a tighter window.
   const yHit = serveBallHeight(game.time + 0.05);
@@ -175,12 +182,14 @@ function serve(inp, game, p, os, skill, mem, dt) {
   const boxSign = -game.rally.serveXSign;
   const edge = game.singles ? 3.2 : 4.4;
   // risk = how close to the lines the bot aims; the box is [0.3 .. edge] wide and 6.9 m deep
-  const lateral = 1.6 + (edge - 1.9) * skill.serveRisk * rnd() + rnd() * 0.6;
-  inp.ax = boxSign * Math.min(edge - 0.3, lateral);
-  inp.az = os * (4.6 + 1.5 * skill.serveRisk * rnd());
+  const lateral = 1.4 + (edge - 2.6) * skill.serveRisk * rnd() + rnd() * 0.6; // bots no longer pick the extreme corners every time
+  inp.ax = boxSign * Math.min(edge - 0.9, lateral);
+  inp.az = os * (3.9 + 1.4 * skill.serveRisk * rnd());
   inp.mod = rnd() < skill.serveSpin ? (rnd() < 0.5 ? 3 : 1) : 0;
+  inp.pace = (skill.servePace ?? 0.9) - rnd() * 0.06; // bots do not serve at full pace every time
   inp.swing = true;
   mem.serveT = 0;
+  mem.serveWaitExtra = undefined;
 }
 
 function formation(inp, game, p, os, skill, mem) {
