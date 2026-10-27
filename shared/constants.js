@@ -44,7 +44,7 @@ export const PLAYER = {
 };
 
 export const SERVER_TICK = 60;
-export const SNAPSHOT_EVERY = 2; // ticks → 30 Hz
+export const SNAPSHOT_EVERY = 1; // every tick (60 Hz): lowest latency, ~70 KB/s per room
 export const POINT_PAUSE = 2.4; // seconds between points
 
 export const SHOT_IDS = [

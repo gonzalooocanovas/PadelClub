@@ -4,6 +4,9 @@ import { Sound } from './audio.js';
 import { UI, toast } from './ui.js';
 import { MatchClient } from './game.js';
 import { settings, setSetting, onSetting } from './settings.js';
+import { LocalMatch } from './local.js';
+import { DEFAULT_SETTINGS } from '/shared/constants.js';
+import { CAREER, starsFor, careerViewFrom, applyCareerResult } from '/shared/career.js';
 
 const net = new Net();
 const world = new World(document.getElementById('gl'));
@@ -22,7 +25,14 @@ let autoJoin = new URLSearchParams(location.search).get('room');
 let level = (() => { try { return localStorage.getItem('padel.level') || 'easy'; } catch { return 'easy'; } })();
 let careerView = null;
 let openCareerAfterLeave = false;
-let wantCareer = false; // the career screen opens only when asked for
+let wantCareer = false; // (server career messages are no longer used: career runs locally)
+let local = null; // running solo match (no network)
+let localCfg = null;
+const localProxy = { rtt: 0, send(m) { if (m.t === 'in') local?.pushInputs(m.inputs); } };
+
+// career progress lives in this browser: {done: {stageId: stars}, xp}
+const loadCareer = () => { try { return JSON.parse(localStorage.getItem('padel.career') || '{}'); } catch { return {}; } };
+const saveCareer = (c) => { try { localStorage.setItem('padel.career', JSON.stringify(c)); } catch { /* optional */ } };
 
 world.setQuality(settings.quality);
 world.setBallScale(settings.ballScale);
@@ -40,9 +50,11 @@ const ui = new UI(document.getElementById('ui'), { sound, act });
 
 function showHome() {
   screen = 'home';
+  stopLocal();
   if (match) { match.stop(); match = null; }
   hud = null;
-  ui.home({ name: net.name, profile, status: net.status, joinCode: autoJoin || '', level, careerStars: careerView ? `${careerView.stars}/${careerView.max}` : null });
+  const cv = careerViewFrom(loadCareer().done || {});
+  ui.home({ name: net.name, profile, status: net.status, joinCode: autoJoin || '', level, careerStars: cv.stars ? `${cv.stars}/${cv.max}` : null });
 }
 
 function lobbyReason() {
@@ -57,6 +69,7 @@ function lobbyReason() {
 
 function showLobby() {
   screen = 'lobby';
+  stopLocal();
   world.setSingles(false);
   const input = document.getElementById('chatInput');
   const keep = input ? { v: input.value, f: document.activeElement === input, s: input.selectionStart } : null;
@@ -73,6 +86,56 @@ function showResults(msg) {
   ui.results(msg, room, room?.you, rematchVotes);
 }
 
+// ---------------------------------------------------------------- solo matches (no network, no lag)
+
+function stopLocal() { local?.stop(); local = null; }
+
+function startLocalMatch(cfg) {
+  stopLocal();
+  localCfg = cfg;
+  const me = (net.name || 'You').slice(0, 16);
+  const s = {
+    ...DEFAULT_SETTINGS, mode: cfg.mode, difficulty: cfg.difficulty,
+    sets: cfg.sets ?? 1, gamesPerSet: cfg.gamesPerSet ?? 4, goldenPoint: !!cfg.golden,
+  };
+  const names = cfg.mode === 'singles'
+    ? [me, 'AI', cfg.opponents?.[0] || 'AI', 'AI']
+    : [me, cfg.partner || 'AI', cfg.opponents?.[0] || 'AI', cfg.opponents?.[1] || 'AI'];
+  const diffs = ['', cfg.partnerDiff || cfg.difficulty, cfg.difficulty, cfg.difficulty];
+  room = { settings: s, hostId: 'local', you: 'local', slots: [], state: 'match', code: 'LOCAL' };
+  local = new LocalMatch({
+    settings: s, names, diffs,
+    onMessage: (m) => net.emit(m.t, m),
+    onFinish: (results) => (cfg.stage ? finishCareer(cfg.stage, results) : null),
+  });
+  local.start();
+}
+
+function startCareer(id) {
+  const stage = CAREER.find((c) => c.id === id);
+  const view = careerViewFrom(loadCareer().done || {});
+  if (!stage || !view.stages.find((c) => c.id === id)?.unlocked) { toast('That stage is locked', true); return; }
+  startLocalMatch({ ...stage, stage });
+}
+
+function finishCareer(stage, results) {
+  const st = loadCareer();
+  const stars = starsFor(results);
+  const r = applyCareerResult(st.done || {}, stage.id, stars);
+  st.done = r.done;
+  st.xp = (st.xp || 0) + r.bonusXp;
+  saveCareer(st);
+  return { stage: stage.id, name: stage.name, won: stars > 0, stars, bonusXp: r.bonusXp, unlocked: r.unlocked, hasNext: stage.id < CAREER.length };
+}
+
+function showCareer() {
+  stopLocal();
+  if (match) { match.stop(); match = null; }
+  careerView = careerViewFrom(loadCareer().done || {});
+  screen = 'career';
+  ui.career(careerView);
+}
+
 // ---------------------------------------------------------------- actions
 
 function act(name, d, el) {
@@ -84,15 +147,15 @@ function act(name, d, el) {
       try { localStorage.setItem('padel.level', level); } catch { /* optional */ }
       showHome();
       break;
-    case 'career': wantCareer = true; net.send({ t: 'career' }); break;
-    case 'careerPlay': net.send({ t: 'careerStart', stage: +d.stage, name: myName() }); break;
-    case 'careerNext': net.send({ t: 'careerStart', stage: (lastResults?.career?.stage || 0) + 1, name: myName() }); break;
-    case 'careerMenu': openCareerAfterLeave = true; net.send({ t: 'leave' }); break;
+    case 'career': showCareer(); break;
+    case 'careerPlay': startCareer(+d.stage); break;
+    case 'careerNext': startCareer((lastResults?.career?.stage || 0) + 1); break;
+    case 'careerMenu': showCareer(); break;
     case 'careerBack': showHome(); break;
     case 'rooms': ui.roomsModal(null); net.send({ t: 'rooms' }); break;
     case 'joinRoom': ui.closeModal(); net.send({ t: 'join', code: d.code, name: myName() }); break;
-    case 'practice': practicePending = 'doubles'; net.send({ t: 'create', name: myName() }); break;
-    case 'practice1': practicePending = 'singles'; net.send({ t: 'create', name: myName() }); break;
+    case 'practice': startLocalMatch({ mode: 'doubles', difficulty: level }); break;
+    case 'practice1': startLocalMatch({ mode: 'singles', difficulty: level }); break;
     case 'join': {
       const code = val('joinCode').trim().toUpperCase();
       if (code.length !== 5) { toast('Enter the 5-character room code', true); break; }
@@ -102,7 +165,9 @@ function act(name, d, el) {
     case 'copy':
       navigator.clipboard?.writeText(d.text).then(() => toast('Invite link copied'), () => toast(d.text));
       break;
-    case 'leave': net.send({ t: 'leave' }); break;
+    case 'leave':
+      if (local) { stopLocal(); room = null; showHome(); } else net.send({ t: 'leave' });
+      break;
     case 'sit': net.send({ t: 'sit', slot: +d.slot }); break;
     case 'select': selected = selected === d.id ? null : d.id; showLobby(); break;
     case 'place':
@@ -124,12 +189,17 @@ function act(name, d, el) {
       i.value = '';
       break;
     }
-    case 'rematch': net.send({ t: 'rematch' }); break;
+    case 'rematch': if (local) startLocalMatch(localCfg); else net.send({ t: 'rematch' }); break;
     case 'tolobby': net.send({ t: 'lobby' }); break;
-    case 'profile': ui.profileModal(profile, net.name); net.send({ t: 'profile' }); break;
+    case 'profile': {
+      const bonus = loadCareer().xp || 0;
+      const merged = profile ? { ...profile, xp: profile.xp + bonus, level: Math.floor(Math.sqrt((profile.xp + bonus) / 100)) + 1 } : null;
+      ui.profileModal(merged, net.name);
+      break;
+    }
     case 'controls': ui.controls(); break;
     case 'settings': ui.settingsModal(() => {}); break;
-    case 'closeModal': ui.closeModal(); match?.setPaused(false); break;
+    case 'closeModal': ui.closeModal(); match?.setPaused(false); local?.setPaused(false); break;
     case 'toggle':
       setSetting(d.key, d.val === '1');
       ui.settingsModal(() => {});
@@ -152,10 +222,9 @@ document.addEventListener('change', (e) => {
 net.on('status', () => {
   if (screen === 'home' && document.activeElement?.id !== 'nameInput') showHome();
 });
-net.on('disconnected', () => hud?.connection(false));
+net.on('disconnected', () => { if (!local) hud?.connection(false); });
 net.on('welcome', (m) => {
   profile = m.profile;
-  net.send({ t: 'career' });
   hud?.connection(true);
   if (screen === 'home' && document.activeElement?.id !== 'nameInput') showHome();
   if (autoJoin && !room) {
@@ -214,9 +283,9 @@ net.on('start', (m) => {
   hud = ui.showHud(m.names, m.settings);
   world.setSingles(m.settings.mode === 'singles');
   match = new MatchClient({
-    net, world, hud, sound, start: m,
+    net: m.local ? localProxy : net, world, hud, sound, start: m,
     onPause: () => {
-      if (ui.modal) { ui.closeModal(); match?.setPaused(false); } else { ui.pauseMenu(); match?.setPaused(true); }
+      if (ui.modal) { ui.closeModal(); match?.setPaused(false); local?.setPaused(false); } else { ui.pauseMenu(); match?.setPaused(true); local?.setPaused(true); }
     },
   });
   screen = 'game';
@@ -251,10 +320,25 @@ function idle(dt) {
   world.reachRing.visible = false; world.meRing.position.y = -5;
 }
 
+// automatic graphics quality: if the game cannot hold ~40 fps, step the preset down
 let last = performance.now();
+let fpsT = 0, fpsN = 0, slowWindows = 0;
 function loop(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
+  fpsT += dt; fpsN++;
+  if (fpsT >= 2) {
+    const fps = fpsN / fpsT;
+    fpsT = 0; fpsN = 0;
+    slowWindows = screen === 'game' && fps < 38 && !document.hidden ? slowWindows + 1 : 0;
+    if (slowWindows >= 2 && settings.quality !== 'low') {
+      const next = settings.quality === 'high' ? 'medium' : 'low';
+      setSetting('quality', next);
+      world.setQuality(next);
+      toast(`Low frame rate: graphics set to ${next}`);
+      slowWindows = 0;
+    }
+  }
   if (match && screen === 'game') match.frame(dt, now);
   else if (screen !== 'results' && !window.__freeze) idle(dt);
   world.render(dt);
@@ -266,4 +350,4 @@ showHome();
 requestAnimationFrame(loop);
 
 // handy for debugging / automated checks
-window.__padel = { world, net, get match() { return match; }, get room() { return room; } };
+window.__padel = { world, net, get local() { return local; }, get match() { return match; }, get room() { return room; } };

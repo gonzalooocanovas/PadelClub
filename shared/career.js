@@ -23,3 +23,23 @@ export function starsFor(results) {
   const share = theirs / total;
   return share <= 0.15 ? 3 : share <= 0.4 ? 2 : 1;
 }
+
+/** Ladder view from a {stageId: stars} map: stars per stage and which stages are unlocked. */
+export function careerViewFrom(done = {}) {
+  const stages = CAREER.map((s) => ({ ...s, stars: done[s.id] || 0, unlocked: s.id === 1 || (done[s.id - 1] || 0) >= 1 }));
+  return { stages, stars: stages.reduce((a, s) => a + s.stars, 0), max: CAREER.length * 3 };
+}
+
+/** Apply a result to the stars map. Bonus XP is paid only for improving your best stars on a stage. */
+export function applyCareerResult(done, stageId, stars) {
+  const stage = CAREER.find((s) => s.id === stageId);
+  const prev = done[stageId] || 0;
+  const next = { ...done };
+  let bonusXp = 0, unlocked = null;
+  if (stage && stars > prev) {
+    next[stageId] = stars;
+    bonusXp = stage.xp * (stars - prev);
+    if (prev === 0 && CAREER.some((s) => s.id === stageId + 1)) unlocked = stageId + 1;
+  }
+  return { done: next, stars, prev, bonusXp, unlocked };
+}

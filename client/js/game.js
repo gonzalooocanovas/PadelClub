@@ -20,6 +20,7 @@ const QUICK = ['Nice shot!', 'Mine!', 'Yours!', 'Switch!'];
 export class MatchClient {
   constructor({ net, world, hud, sound, start, onPause }) {
     this.net = net; this.world = world; this.hud = hud; this.sound = sound; this.onPause = onPause;
+    this.interp = start.local ? 0.03 : 0.07; // render delay: tiny for local matches, a few snapshots online
     this.slot = start.slot;
     this.team = start.slot >> 1;
     this.names = start.names;
@@ -239,7 +240,7 @@ export class MatchClient {
   }
 
   onEvents(evs) {
-    const later = (fn) => setTimeout(() => !this.stopped && fn(), INTERP * 900);
+    const later = (fn) => setTimeout(() => !this.stopped && fn(), this.interp * 900);
     for (const e of evs) {
       switch (e.e) {
         case 'serve': {
@@ -281,6 +282,10 @@ export class MatchClient {
           this.hud.setScore(e.score, this.names);
           this.hud.setStats(e.st, e.lr);
           if (e.winner === this.team) this.world.cheerCrowd();
+          setTimeout(() => {
+            if (this.stopped) return;
+            for (let s = 0; s < 4; s++) if (this.world.players[s].root.visible) this.world.emote(s, (s >> 1) === e.winner ? 'win' : 'lose');
+          }, 350);
           const top = e.marks.find((m) => m.type === 'match') || e.marks.find((m) => m.type === 'set') || e.marks.find((m) => m.type === 'game');
           const team = e.winner === this.team ? 'Your team' : 'Opponents';
           const why = e.reason === 'bounce' && e.rally === 1 ? 'Ace' : REASONS[e.reason] || '';
@@ -307,7 +312,7 @@ export class MatchClient {
   interpolated(now) {
     const s = this.snaps;
     if (!s.length) return null;
-    const t = now - INTERP * 1000;
+    const t = now - this.interp * 1000;
     let i = s.length - 1;
     while (i > 0 && s[i - 1].rt > t) i--;
     const a = s[Math.max(0, i - 1)], b = s[i];

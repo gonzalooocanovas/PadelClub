@@ -109,3 +109,17 @@ test('bot levels are really different: stronger levels beat weaker ones', async 
     assert.ok(wins >= 7, hi + ' should beat ' + lo + ' (' + wins + '/8)');
   }
 });
+
+test('career helpers (used by the in-browser career) match the server rules', async () => {
+  const { careerViewFrom, applyCareerResult } = await import('../shared/career.js');
+  let done = {};
+  assert.deepEqual(careerViewFrom(done).stages.map((s) => s.unlocked).slice(0, 3), [true, false, false]);
+  let r = applyCareerResult(done, 1, 2);
+  assert.equal(r.unlocked, 2); assert.equal(r.bonusXp, CAREER[0].xp * 2);
+  done = r.done;
+  r = applyCareerResult(done, 1, 2);
+  assert.equal(r.bonusXp, 0); assert.equal(r.unlocked, null);
+  assert.equal(applyCareerResult(done, 1, 3).bonusXp, CAREER[0].xp);
+  assert.equal(careerViewFrom(done).stages[1].unlocked, true);
+  assert.equal(done[1], 2, 'input map is not mutated');
+});

@@ -67,6 +67,9 @@ function bannerTexture() {
 // yaw < 0 = the player's right; pitch < 0 raises the arm forward/up; step > 0 = right foot forward.
 const READY = [0, 0, 0.12, 0.32, -0.45, -0.7, 1.7, 0.35, -0.5, 0.9, 0];
 // serving: ball bounced in the left hand, racket low and back
+// after a point: the winners celebrate, the losers hang their head
+const EMOTE_WIN = [0.1, 0.15, -0.05, 0.25, -0.6, -2.9, 0.4, 0.4, -2.7, 0.5, 0];
+const EMOTE_LOSE = [0, 0, 0.3, 0.15, -0.2, -0.25, 0.5, 0.12, -0.1, 0.3, 0];
 const SERVE_READY = [0.05, -0.2, 0.15, 0.45, -0.3, 0.15, 0.5, 0.15, -0.2, 0.5, -0.1];
 // each shot: [load, contact, follow]
 const SWING = {
@@ -517,6 +520,9 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
     pl.racket.quaternion.copy(T.q.invert()).multiply(T.qw);
   }
 
+  /** type: 'win' | 'lose' */
+  emote(slot, type) { this.players[slot].emote = { type, t: 0 }; }
+
   splitStep(slot) { this.players[slot].split = 0.3; }
 
   /**
@@ -559,8 +565,14 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
 
     // target pose
     let target;
-if (swinging) target = this.swingParams(v.kindName, v.swingT, pl.startPose || READY);
-    else if (v.serving) {
+if (swinging) {
+      const st = pl.startPose || READY;
+      target = this.swingParams(v.kindName, v.swingT, st);
+      const lead = this.swingParams(v.kindName, v.swingT + 0.04, st); // hips and legs lead the swing
+      const lag = this.swingParams(v.kindName, Math.max(0, v.swingT - 0.03), st); // the arm whips through behind the body
+      target[0] = lead[0]; target[3] = lead[3]; target[10] = lead[10];
+      target[4] = lag[4]; target[5] = lag[5]; target[6] = lag[6];
+    } else if (v.serving) {
       target = SERVE_READY.slice();
       // the left hand follows the bouncing ball: arm down when it is low, forearm up when it comes back
       const k = Math.min(1, Math.max(0, (bp.y - 0.1) / 0.86));
@@ -582,10 +594,33 @@ if (swinging) target = this.swingParams(v.kindName, v.swingT, pl.startPose || RE
         }
       }
     }
+    let emoteHop = 0, emoteHead = null;
+    if (pl.emote && !swinging) {
+      const e = pl.emote;
+      e.t += dt;
+      if (e.t > 2.4) pl.emote = null;
+      else {
+        const fade = Math.min(1, e.t / 0.25, (2.4 - e.t) / 0.5);
+        const tgt = e.type === 'win' ? EMOTE_WIN : EMOTE_LOSE;
+        for (let n = 0; n < target.length; n++) target[n] += (tgt[n] - target[n]) * fade;
+        if (e.type === 'win') emoteHop = Math.abs(Math.sin(e.t * 8)) * 0.1 * fade;
+        else emoteHead = { x: 0.4 * fade, y: Math.sin(e.t * 3) * 0.3 * fade };
+      }
+    }
     const k = swinging ? 1 : 1 - Math.exp(-dt * 13);
     for (let n = 0; n < target.length; n++) pl.cur[n] += (target[n] - pl.cur[n]) * k;
     const P = pl.cur.slice();
     const calm = swinging ? 0.25 : 1;
+    // lean into acceleration, sit back when braking
+    pl.accS = (pl.accS || 0) + (((sp - (pl.prevSp ?? sp)) / Math.max(dt, 1e-3)) - (pl.accS || 0)) * Math.min(1, dt * 6);
+    pl.prevSp = sp;
+    const leanA = THREE.MathUtils.clamp(pl.accS * 0.012, -0.12, 0.18) * calm;
+    const brake = THREE.MathUtils.clamp(-pl.accS * 0.012, 0, 0.18) * calm;
+    // landing from a jump: absorb with the knees
+    if (pl.wasJump && !(v.jumpT > 0)) pl.land = 0.28;
+    pl.wasJump = v.jumpT > 0;
+    let landCrouch = 0;
+    if (pl.land > 0) { landCrouch = Math.sin((pl.land / 0.28) * Math.PI) * 0.35; pl.land -= dt; }
     // idle life: breathing, weight shift, a light bounce on the toes and a loose racket. Fades out while running.
     const idle = swinging ? 0 : Math.max(0, 1 - speed / 1.5);
     const it = this.clock + pl.idlePh;
@@ -610,18 +645,18 @@ if (swinging) target = this.swingParams(v.kindName, v.swingT, pl.startPose || RE
       pl.split = Math.max(0, pl.split - dt);
     }
     // jump: coil, extend, tuck
-    let crouch = P[3] * (1 - 0.55 * run) + splitCrouch; // upright stride when running
+    let crouch = P[3] * (1 - 0.55 * run) + splitCrouch + brake + landCrouch; // upright stride when running
     if (v.jumpT > 0) {
       const u = 1 - v.jumpT / 0.62;
       crouch = u < 0.18 ? 0.5 : u < 0.8 ? 0.08 : 0.45;
     }
     const a = crouch;
-    pl.hips.position.y = 0.88 * Math.cos(a) + 0.1 + hop + Math.cos(2 * ph) * 0.025 * run * calm; // gentle two-per-stride bob, no hopping
-    pl.hips.rotation.set(0, P[0], 0);
+    pl.hips.position.y = 0.88 * Math.cos(a) + 0.1 + hop + emoteHop + Math.cos(2 * ph) * 0.025 * run * calm; // gentle two-per-stride bob, no hopping
+    pl.hips.rotation.set(0, P[0] - Math.sin(ph) * 0.12 * run * calm * dirF, 0); // hips and shoulders counter-rotate when running
     pl.hips.rotation.x = Math.max(-0.3, Math.min(0.35, vf * 0.03)) * calm;
     pl.hips.rotation.z = -vl * 0.02 * calm + sway * 0.03;
     pl.hips.position.x = sway * 0.025;
-    pl.spine.rotation.set(P[2] + (vf > 0 ? Math.min(0.3, vf * 0.04) : Math.max(-0.1, vf * 0.015)) * calm, P[1], 0);
+    pl.spine.rotation.set(P[2] + (vf > 0 ? Math.min(0.3, vf * 0.04) : Math.max(-0.1, vf * 0.015)) * calm + leanA, P[1] + Math.sin(ph) * 0.18 * run * calm * dirF, 0);
 
     // legs: base crouch + stride + shuffle + batting step
     const legPose = (L, sgn) => {
@@ -631,7 +666,7 @@ if (swinging) target = this.swingParams(v.kindName, v.swingT, pl.startPose || RE
       const step = P[10] * (sgn > 0 ? -0.55 : 0.55); // right leg (sgn<0) steps forward when step>0
       L.thigh.rotation.x = -a - stride - step * 0.8;
       L.knee.rotation.x = 2 * a + lift + Math.abs(step) * 0.35;
-      L.foot.rotation.x = -(L.thigh.rotation.x + L.knee.rotation.x) * 0.9;
+      L.foot.rotation.x = -(L.thigh.rotation.x + L.knee.rotation.x) * 0.9 + Math.max(0, -Math.sin(phL) * dirF) * 0.5 * run * calm; // toe-off
       L.thigh.rotation.z = Math.sin(phL) * rollAmp * dirL * sgn * calm + (swinging ? sgn * 0.12 : sgn * 0.06);
     };
     legPose(this.players[i].legL, 1);
@@ -640,16 +675,17 @@ if (swinging) target = this.swingParams(v.kindName, v.swingT, pl.startPose || RE
     // arms
     const counter = Math.sin(ph) * pitchAmp * 1.1 * calm;
     pl.armR.sh.rotation.set(P[5], P[4], 0);
-    pl.armR.elbow.rotation.set(-P[6], 0, 0);
+    pl.armR.elbow.rotation.set(-(P[6] + Math.sin(ph + Math.PI) * 0.15 * run * calm), 0, 0);
     pl.armL.sh.rotation.set(P[8] + counter, P[7], 0.12);
-    pl.armL.elbow.rotation.set(-P[9], 0, 0);
+    pl.armL.elbow.rotation.set(-(P[9] + 0.55 * run * calm), 0, 0); // running arms bend
     this.orientRacket(pl);
 
     // head tracks the ball
     const total = pl.yaw + P[0] + P[1];
     const look = wrap(Math.atan2(bp.x - v.x, bp.z - v.z) - total);
     pl.head.rotation.y += (THREE.MathUtils.clamp(look, -1.0, 1.0) * 0.85 - pl.head.rotation.y) * Math.min(1, dt * 12);
-    pl.head.rotation.x = 0.08 - P[2] * 0.5 + Math.min(0.2, Math.max(-0.2, (bp.y - 1.5) * -0.04));
+    pl.head.rotation.x = 0.08 - (pl.spine.rotation.x) * 0.6 + Math.min(0.2, Math.max(-0.2, (bp.y - 1.5) * -0.04)); // gaze stays level when the body leans
+    if (emoteHead) { pl.head.rotation.x += emoteHead.x; pl.head.rotation.y += emoteHead.y; }
 
     const lift = v.jumpT > 0 ? Math.sin(Math.PI * (1 - v.jumpT / 0.62)) * 0.7 : 0;
     pl.root.position.set(v.x, lift, v.z);
