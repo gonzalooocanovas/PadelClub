@@ -32,22 +32,22 @@ export const COURTS = {
   indoor: {
     id: 'indoor', name: 'Premium Indoor Club',
     blurb: 'Fast, even indoor turf under a high roof and refined lighting.',
-    surface: { floorE: 0.74, floorFric: 0.86 },
+    surface: { floorE: 0.85, floorFric: 0.86 },
   },
   outdoor: {
     id: 'outdoor', name: 'Mediterranean Court',
     blurb: 'Warm daylight, palms and white walls. Slightly slower, more abrasive turf.',
-    surface: { floorE: 0.72, floorFric: 0.84 },
+    surface: { floorE: 0.83, floorFric: 0.84 },
   },
   rooftop: {
     id: 'rooftop', name: 'Sunset Rooftop',
     blurb: 'A city rooftop at golden hour with string lights. Slightly quick turf.',
-    surface: { floorE: 0.73, floorFric: 0.85 },
+    surface: { floorE: 0.84, floorFric: 0.85 },
   },
   night: {
     id: 'night', name: 'Night Arena',
     blurb: 'Floodlit tournament arena with a full crowd. Fast turf.',
-    surface: { floorE: 0.74, floorFric: 0.855 },
+    surface: { floorE: 0.85, floorFric: 0.855 },
   },
 };
 export const COURT_IDS = Object.keys(COURTS);

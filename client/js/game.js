@@ -351,7 +351,7 @@ export class MatchClient {
           if (e.k === 'door') { later(() => this.hud.banner('Out the door!', 'Chase it outside', 1400)); break; }
           const pw = clamp((e.s || 4) / 9, 0.3, 1.4);
           later(() => {
-            this.sound.play(e.k, { pan: e.x / 5, power: pw, mesh: e.k === 'wall' && e.y > 3 });
+            this.sound.play(e.k, { pan: e.x / 5, power: pw, mesh: e.k === 'wall' && (e.mesh ?? e.y > 3) });
             this.world.spawnFx(e.k, e.x, e.y, e.z, pw, e.axis);
           });
           break;

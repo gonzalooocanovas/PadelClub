@@ -16,10 +16,12 @@ export const COURT = {
 
 export const PHYS = {
   G: 9.81,
-  FLOOR_E: 0.74, // vertical restitution on turf
+  FLOOR_E: 0.85, // vertical restitution on turf (livelier than before: the ball bounces higher)
   FLOOR_FRIC: 0.86, // horizontal speed kept per floor bounce
-  WALL_E: 0.62,
-  WALL_FRIC: 0.93,
+  WALL_E: 0.82, // glass: hard and lively
+  WALL_FRIC: 0.97,
+  MESH_E: 0.34, // fence (verja): soft and dead
+  MESH_FRIC: 0.84,
   DT: 1 / 60,
   MAGNUS: 0.012,
   DRAG: 0.06,

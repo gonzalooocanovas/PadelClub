@@ -16,9 +16,9 @@ const SKILL = {
   // flub: chance to miss a ball outright · aggr: willingness to attack · lob/slice/smash: shot mix
   // serveSpin: chance of a spin serve · serveTiming: waits for the ideal bounce height · plan: replanning interval
   easy: { speed: 0.9, sprint: true, react: 0.3, noise: 2.0, reach: 1.9, flub: 0.24, timingErr: 0.24, aggr: 0.12, lob: 0.35, slice: 0.08, smash: 0.35, serveSpin: 0, serveTiming: false, serveWindow: 0.45, servePace: 0.68, serveRisk: 0.0, plan: 0.12 },
-  normal: { speed: 0.96, sprint: true, react: 0.18, noise: 1.2, reach: 2.0, flub: 0.16, timingErr: 0.14, aggr: 0.3, lob: 0.45, slice: 0.18, smash: 0.5, serveSpin: 0.15, serveTiming: false, serveWindow: 0.25, servePace: 0.72, serveRisk: 0.3, plan: 0.1 },
-  hard: { speed: 0.97, sprint: true, react: 0.09, noise: 0.55, reach: 2.15, flub: 0.1, timingErr: 0.07, aggr: 0.5, lob: 0.5, slice: 0.25, smash: 0.7, serveSpin: 0.4, serveTiming: true, serveWindow: 0.12, servePace: 0.76, serveRisk: 0.6, plan: 0.07 },
-  expert: { speed: 1.09, sprint: true, react: 0.04, noise: 0.2, reach: 2.35, flub: 0.025, timingErr: 0.03, aggr: 0.75, lob: 0.55, slice: 0.3, smash: 0.85, serveSpin: 0.6, serveTiming: true, serveWindow: 0.05, servePace: 0.8, serveRisk: 0.85, plan: 0.05 },
+  normal: { speed: 0.96, sprint: true, react: 0.18, noise: 1.4, reach: 1.95, flub: 0.19, timingErr: 0.14, aggr: 0.3, lob: 0.45, slice: 0.18, smash: 0.5, serveSpin: 0.15, serveTiming: false, serveWindow: 0.25, servePace: 0.72, serveRisk: 0.3, plan: 0.1 },
+  hard: { speed: 0.95, sprint: true, react: 0.09, noise: 0.5, reach: 2.2, flub: 0.08, timingErr: 0.07, aggr: 0.5, lob: 0.5, slice: 0.25, smash: 0.7, serveSpin: 0.4, serveTiming: true, serveWindow: 0.12, servePace: 0.76, serveRisk: 0.6, plan: 0.07 },
+  expert: { speed: 1.1, sprint: true, react: 0.03, noise: 0.15, reach: 2.4, flub: 0.02, timingErr: 0.03, aggr: 0.45, lob: 0.55, slice: 0.3, smash: 0.85, serveSpin: 0.6, serveTiming: true, serveWindow: 0.05, servePace: 0.8, serveRisk: 0.85, plan: 0.05 },
 };
 
 const skillCache = new Map();
@@ -219,12 +219,22 @@ function chooseShot(inp, game, p, os, skill) {
   const opp = game.players.filter((o) => o.team !== p.team && o.active);
   const netOpp = opp.filter((o) => Math.abs(o.z) < 4.5).length;
   const deepOpp = opp.filter((o) => Math.abs(o.z) > 6.5).length;
-  const lim = (game.singles ? 2.2 : 2.4) + 1.4 * skill.aggr; // stronger players go closer to the lines
-
-  // open space: the lateral position farthest from every opponent
-  let bestX = 0, bestScore = -1;
-  for (let x = -lim; x <= lim + 0.01; x += lim / 2) {
-    const score = Math.min(...opp.map((o) => Math.abs(o.x - x) + 0.15 * Math.abs(Math.abs(o.z) - 6))) + rnd() * (1.4 - skill.aggr);
+  // Where to send it: weigh the open space (away from the opponents, the net player most of all) against changing the
+  // direction of the ball (cross-court or down the line instead of always straight back) and keep away from the very
+  // lines unless the bot is good enough to risk it.
+  const lim = (game.singles ? 2.6 : 3.0) + 1.0 * skill.aggr;
+  let bestX = 0, bestScore = -Infinity;
+  const steps = game.singles ? [-2.6, -1.3, 0, 1.3, 2.6] : [-3.8, -2.5, -1.2, 0, 1.2, 2.5, 3.8];
+  for (const x of steps) {
+    if (Math.abs(x) > lim) continue;
+    let space = Infinity;
+    for (const o of opp) {
+      const w = Math.abs(o.z) < 4.5 ? 1.35 : 1.0; // a player at the net covers less ground sideways but punishes a weak ball
+      space = Math.min(space, Math.abs(o.x - x) * w + 0.12 * Math.abs(Math.abs(o.z) - 6));
+    }
+    const change = Math.abs(x - b.x) * 0.32; // send it somewhere else than where it came from
+    const centre = Math.abs(x) < 0.7 ? -0.9 : 0; // the middle is the default of a weak player, not a plan
+    const score = space + change + centre + rnd() * (1.6 - skill.aggr);
     if (score > bestScore) { bestScore = score; bestX = x; }
   }
   inp.ax = bestX + (rnd() - 0.5) * skill.noise;

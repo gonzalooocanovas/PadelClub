@@ -196,7 +196,7 @@ export class PadelGame {
     } else if (this.phase === 'point' || this.phase === 'ended') {
       const ev = [];
       stepBall(this.ball, dt, ev); // let the ball coast (also after the last point of the match); events no longer matter
-      for (const e of ev) if (e.type === 'floor' || e.type === 'wall') this.events.push({ e: 'ball', k: e.type, x: e.x, y: e.y ?? 0, z: e.z, s: e.speed });
+      for (const e of ev) if (e.type === 'floor' || e.type === 'wall') this.events.push({ e: 'ball', k: e.type, x: e.x, y: e.y ?? 0, z: e.z, s: e.speed, mesh: !!e.mesh });
       if (this.phase === 'point') {
         this.pauseT -= dt;
         if (this.pauseT <= 0) this.startPoint();
@@ -501,7 +501,7 @@ export class PadelGame {
     }
     if (e.type === 'cord') { this.events.push({ e: 'ball', k: 'net', x: e.x, y: e.y, z: 0, s: e.speed * 0.5 }); return; }
     if (e.type === 'wall') {
-      this.events.push({ e: 'ball', k: 'wall', axis: e.axis, x: e.x, y: e.y, z: e.z, s: e.speed });
+      this.events.push({ e: 'ball', k: 'wall', axis: e.axis, x: e.x, y: e.y, z: e.z, s: e.speed, mesh: !!e.mesh });
       if (r.bounces === 0) {
         if (r.serving) this.fault('out');
         else this.endPoint(1 - r.lastTeam, 'out');

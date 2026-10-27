@@ -80,10 +80,13 @@ export function netHeight(x) {
   return COURT.NET_H + 0.04 * u * u;
 }
 
-/** Glass returns the ball livelier at low speed; the mesh above 3 m is much deader. */
-export function wallE(speed, y) {
-  const e = PHYS.WALL_E * (1 - 0.012 * Math.min(speed, 20));
-  return y > 3 ? e * 0.55 : e;
+/**
+ * Wall restitution. Glass (back walls up to 3 m, and the side walls in the back 4 m) is hard and lively; the fence (verja:
+ * the side walls through the middle, and the mesh above 3 m) is soft and dead. Faster balls lose a little more.
+ */
+export function wallE(speed, mesh) {
+  const k = 1 - 0.01 * Math.min(speed, 20);
+  return (mesh ? PHYS.MESH_E : PHYS.WALL_E) * k;
 }
 
 export const SERVE_BOUNCE_PERIOD = 1.1; // seconds per bounce of the ball in the server's hand (slower than before: easier to time)
@@ -179,11 +182,12 @@ export function stepBall(b, dt, events) {
     } else {
       const s = Math.sign(nx);
       nx = s * (hw - BALL_R);
-      events.push({ type: 'wall', axis: 'x', x: nx, y: ny, z: nz, speed: Math.abs(b.vx) });
-      b.vx = -b.vx * wallE(Math.abs(b.vx), ny);
-      b.vz += -hx0 * (b.ss || 0) * PHYS.WALL_SPIN; // sidespin kicks the ball along the glass
-      b.vz *= PHYS.WALL_FRIC;
-      b.vy *= PHYS.WALL_FRIC;
+      const mesh = ny > 3 || (hw >= HALF_W && Math.abs(nz) < 6); // 1v1 has glass all along; in doubles the middle of the side wall is fence
+      events.push({ type: 'wall', axis: 'x', x: nx, y: ny, z: nz, speed: Math.abs(b.vx), mesh });
+      b.vx = -b.vx * wallE(Math.abs(b.vx), mesh);
+      b.vz += -hx0 * (b.ss || 0) * PHYS.WALL_SPIN * (mesh ? 0.3 : 1); // sidespin kicks the ball along the glass, much less off the fence
+      b.vz *= mesh ? PHYS.MESH_FRIC : PHYS.WALL_FRIC;
+      b.vy *= mesh ? PHYS.MESH_FRIC : PHYS.WALL_FRIC;
     }
   }
   // back walls
@@ -193,11 +197,12 @@ export function stepBall(b, dt, events) {
     } else {
       const s = Math.sign(nz);
       nz = s * (HALF_L - BALL_R);
-      events.push({ type: 'wall', axis: 'z', x: nx, y: ny, z: nz, speed: Math.abs(b.vz) });
-      b.vz = -b.vz * wallE(Math.abs(b.vz), ny);
-      b.vx += hz0 * (b.ss || 0) * PHYS.WALL_SPIN;
-      b.vx *= PHYS.WALL_FRIC;
-      b.vy *= PHYS.WALL_FRIC;
+      const mesh = ny > 3; // glass to 3 m, fence above
+      events.push({ type: 'wall', axis: 'z', x: nx, y: ny, z: nz, speed: Math.abs(b.vz), mesh });
+      b.vz = -b.vz * wallE(Math.abs(b.vz), mesh);
+      b.vx += hz0 * (b.ss || 0) * PHYS.WALL_SPIN * (mesh ? 0.3 : 1);
+      b.vx *= mesh ? PHYS.MESH_FRIC : PHYS.WALL_FRIC;
+      b.vy *= mesh ? PHYS.MESH_FRIC : PHYS.WALL_FRIC;
     }
   }
 
@@ -207,7 +212,7 @@ export function stepBall(b, dt, events) {
     events.push({ type: 'floor', x: nx, z: nz, speed: Math.abs(b.vy) });
     // backspin (sb>0) bites: lower bounce, ball slows. Topspin (sb<0) kicks up and forward.
     const s = b.sb || 0;
-    b.vy = -b.vy * clamp((b.fe ?? PHYS.FLOOR_E) * (1 - 0.014 * s) * (1 - 0.008 * Math.min(Math.abs(b.vy), 12)), 0.35, 0.95);
+    b.vy = -b.vy * clamp((b.fe ?? PHYS.FLOOR_E) * (1 - 0.014 * s) * (1 - 0.004 * Math.min(Math.abs(b.vy), 12)), 0.35, 0.95);
     if (b.vy < 0.5) b.vy = 0;
     const hf = clamp((b.ff ?? PHYS.FLOOR_FRIC) * (1 - 0.016 * s), 0.5, 1.02);
     b.vx *= hf; b.vz *= hf;

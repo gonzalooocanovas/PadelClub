@@ -92,3 +92,9 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 - ✅ Bots wait longer before serving (2+ s, random) so receivers are set, serve with less than full pace and avoid the extreme corners every time
 - ✅ Serve: the bounce of the ball in the server's hand is slower (1.1 s per bounce instead of 0.8), and holding the hit key charges serve power (tap = normal, full charge 0.9 s = +22% pace but a less accurate serve); the serve is struck when you release
 - ✅ Bot levels retuned after these changes (Legend 9/12 vs Pro, Pro 10/12 vs Club, Club 10/12 vs Rookie in simulation)
+
+## Ball and walls, bot targets (latest pass)
+- ✅ Two kinds of wall: glass (back walls up to 3 m, and the back 4 m of the side walls; all of the side walls in 1v1) is hard and lively (restitution 0.82, keeps its speed); the fence/verja (the middle of the side walls and the mesh above 3 m) is soft and dead (0.34, much more friction). The rebound sound uses the real material. Unit-tested
+- ✅ Livelier floor: restitution raised (0.85 indoor/night, 0.83 outdoor, 0.84 rooftop) and less loss on hard impacts, so the ball bounces higher and rallies use the walls more
+- ✅ Bot targets: in doubles bots now weigh the open space (net players count more), changing the direction of the ball and avoiding the dead centre, so they play cross-court and down the line instead of always back through the middle (landing spots in simulation are about 15% central, the rest spread to both sides)
+- Bot levels retuned again after the physics change (Legend 13/16 vs Pro, Pro 15/16 vs Club, Club 15/16 vs Rookie; aces 2–9%)
