@@ -6,6 +6,7 @@ import { botInput, makeBotMemory } from '../shared/ai.js';
 import { DEFAULT_SETTINGS, SNAPSHOT_EVERY, SERVER_TICK } from '../shared/constants.js';
 import { scoreView } from '../shared/scoring.js';
 import { CAREER, starsFor } from '../shared/career.js';
+import { sanitizeLook, COURT_IDS } from '../shared/looks.js';
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const MAX_QUEUE = 10;
@@ -44,9 +45,9 @@ export class Room {
     return [...this.members.values()].length;
   }
 
-  addMember({ token, name, ws }) {
+  addMember({ token, name, ws, look }) {
     const id = crypto.randomBytes(3).toString('hex');
-    const m = { id, token, name: cleanName(name), ws, connected: true, ready: false, rtt: 0, dropTimer: null };
+    const m = { id, token, name: cleanName(name), ws, connected: true, ready: false, rtt: 0, dropTimer: null, look: look ? sanitizeLook(look) : null };
     this.members.set(id, m);
     if (!this.hostId) this.hostId = id;
     // take the first free slot, otherwise replace a bot
@@ -136,7 +137,7 @@ export class Room {
         if (!s) return null;
         if (s.kind === 'bot') return { kind: 'bot', name: s.name || 'AI' };
         const m = this.members.get(s.id);
-        return { kind: 'human', id: m.id, name: m.name, ready: m.ready || m.id === this.hostId, connected: m.connected, rtt: m.rtt };
+        return { kind: 'human', id: m.id, name: m.name, ready: m.ready || m.id === this.hostId, connected: m.connected, rtt: m.rtt, look: m.look };
       }),
     };
   }
@@ -186,6 +187,7 @@ export class Room {
     if (['easy', 'normal', 'hard', 'expert'].includes(s.difficulty)) n.difficulty = s.difficulty;
     if (typeof s.fillBots === 'boolean') n.fillBots = s.fillBots;
     if (typeof s.public === 'boolean') n.public = s.public;
+    if (COURT_IDS.includes(s.court)) n.court = s.court;
     if ((s.mode === 'singles' || s.mode === 'doubles') && s.mode !== n.mode) {
       const err = this.applyMode(s.mode);
       if (err) return err;
@@ -252,6 +254,7 @@ export class Room {
     const names = this.slots.map((s) => (s?.kind === 'human' ? this.members.get(s.id).name : s?.name || 'AI'));
     this.send(m, {
       t: 'start', slot: this.slotOf(m.id), names, settings: this.settings,
+      looks: this.slots.map((s, i) => sanitizeLook(s?.kind === 'human' ? this.members.get(s.id)?.look : s?.look, i)),
       score: scoreView(this.game.match), tickRate: SERVER_TICK,
     });
   }
@@ -269,17 +272,17 @@ export class Room {
   setupCareer(stage, member) {
     this.career = stage.id;
     this.settings = {
-      ...DEFAULT_SETTINGS, fillBots: true, public: false, mode: stage.mode, difficulty: stage.difficulty,
+      ...DEFAULT_SETTINGS, fillBots: true, public: false, mode: stage.mode, difficulty: stage.difficulty, court: stage.court || 'indoor',
       sets: stage.sets, gamesPerSet: stage.gamesPerSet, goldenPoint: !!stage.golden,
     };
-    const bot = (name, diff) => ({ kind: 'bot', name, diff });
+    const bot = (name, diff, look) => ({ kind: 'bot', name, diff, look });
     this.slots = [{ kind: 'human', id: member.id }, null, null, null];
     if (stage.mode === 'doubles') {
-      this.slots[1] = bot(stage.partner, stage.partnerDiff || stage.difficulty);
-      this.slots[2] = bot(stage.opponents[0], stage.difficulty);
-      this.slots[3] = bot(stage.opponents[1], stage.difficulty);
+      this.slots[1] = bot(stage.partner, stage.partnerDiff || stage.difficulty, stage.looks?.[0]);
+      this.slots[2] = bot(stage.opponents[0], stage.difficulty, stage.looks?.[1]);
+      this.slots[3] = bot(stage.opponents[1], stage.difficulty, stage.looks?.[2]);
     } else {
-      this.slots[2] = bot(stage.opponents[0], stage.difficulty);
+      this.slots[2] = bot(stage.opponents[0], stage.difficulty, stage.looks?.[0]);
     }
     this.beginMatch();
   }
@@ -413,20 +416,20 @@ export class RoomManager {
     }
   }
 
-  create({ token, name, ws }) {
+  create({ token, name, ws, look }) {
     const room = new Room(this.newCode(), this.store);
     this.rooms.set(room.code, room);
-    const m = room.addMember({ token, name, ws });
+    const m = room.addMember({ token, name, ws, look });
     this.byToken.set(token, { room, id: m.id });
     return { room, member: m };
   }
 
-  join(code, { token, name, ws }) {
+  join(code, { token, name, ws, look }) {
     const room = this.rooms.get(String(code || '').toUpperCase().trim());
     if (!room) return { error: 'Room not found. Check the code and try again.' };
     const err = room.canJoin();
     if (err) return { error: err };
-    const m = room.addMember({ token, name, ws });
+    const m = room.addMember({ token, name, ws, look });
     this.byToken.set(token, { room, id: m.id });
     return { room, member: m };
   }

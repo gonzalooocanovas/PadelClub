@@ -2,6 +2,7 @@
 services:
   - type: web
     name: padel-club
+    region: frankfurt   # Europe: lowest latency for players in Spain/EU (a service's region cannot be changed after creation)
     runtime: node
     plan: free
     buildCommand: npm ci --omit=dev

@@ -1,6 +1,9 @@
 // DOM screens: home, lobby, HUD, results, modals. Pure presentation + callbacks into main.js.
 import { settings, setSetting } from './settings.js';
 import { BOT_LEVELS, BOT_LABELS } from '/shared/ai.js';
+import { ARCHETYPES, HAIR_STYLES, SKIN_TONES, RACKETS, COURTS, COURT_IDS } from '/shared/looks.js';
+
+const COURT_SHORT = { indoor: 'Indoor', outdoor: 'Outdoor', night: 'Night' };
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -41,7 +44,7 @@ export class UI {
 
   // ------------------------------------------------------------------ home
 
-  home({ name, profile, status, joinCode, level = 'easy', careerStars = null }) {
+  home({ name, profile, status, joinCode, level = 'easy', careerStars = null, court = 'indoor' }) {
     const lvl = profile?.level ?? 1;
     const xp = profile?.xp ?? 0;
     const into = xp - (lvl - 1) ** 2 * 100;
@@ -60,6 +63,8 @@ export class UI {
         <div class="menu">
           <button class="btn primary" data-act="create" ${status !== 'online' ? 'disabled' : ''}>Play with friends <small>create private room</small></button>
           <button class="btn" data-act="career" ${status !== 'online' ? 'disabled' : ''}>Career <small>${careerStars ? '★ ' + careerStars : 'climb the ladder'}</small></button>
+          <button class="btn" data-act="equipment">Equipment <small>player &amp; racket</small></button>
+          <div class="row levelrow"><span class="label">Court</span><div class="seg grow">${COURT_IDS.map((c) => `<button data-act="court" data-val="${c}" class="${court === c ? 'on' : ''}">${COURT_SHORT[c]}</button>`).join('')}</div></div>
           <div class="row levelrow"><span class="label">Bots</span><div class="seg grow">${BOT_LEVELS.map((l) => `<button data-act="level" data-val="${l}" class="${level === l ? 'on' : ''}">${BOT_LABELS[l]}</button>`).join('')}</div></div>
           <button class="btn" data-act="practice" ${status !== 'online' ? 'disabled' : ''}>Practice 2 vs 2 <small>you + 3 bots</small></button>
           <button class="btn" data-act="practice1" ${status !== 'online' ? 'disabled' : ''}>1 vs 1 <small>you vs AI</small></button>
@@ -130,6 +135,7 @@ export class UI {
         <div class="panel col">
           <div class="label">Match format ${isHost ? '' : '(host controls)'}</div>
           <div class="setting"><span>Mode</span>${seg('mode', [['doubles', '2 vs 2'], ['singles', '1 vs 1']], s.mode || 'doubles', isHost)}</div>
+          <div class="setting"><span>Court</span>${seg('court', COURT_IDS.map((c) => [c, COURT_SHORT[c]]), s.court || 'indoor', isHost)}</div>
           <div class="setting"><span>Sets</span>${seg('sets', [[1, 'Single set'], [3, 'Best of 3']], s.sets, isHost)}</div>
           <div class="setting"><span>Games per set</span>${seg('gamesPerSet', [[2, '2'], [4, '4'], [6, '6']], s.gamesPerSet, isHost)}</div>
           <div class="setting"><span>Deuce</span>${seg('goldenPoint', [[false, 'Advantage'], [true, 'Golden point']], s.goldenPoint, isHost)}</div>
@@ -332,7 +338,32 @@ export class UI {
     return el;
   }
 
-  closeModal() { $('#modal')?.remove(); this.modal = null; }
+  closeModal() { $('#modal')?.remove(); this.modal = null; this.onModalClose?.(); this.onModalClose = null; }
+
+  /** Player + racket customisation with a live 3D preview. Returns the preview canvas. */
+  equipmentModal(look) {
+    const arch = ARCHETYPES.map((a) => `<button class="opt" data-act="lookArch" data-val="${a.id}"><b>${esc(a.name)}</b><span class="mute">${esc(a.blurb)}</span></button>`).join('');
+    const hair = HAIR_STYLES.map((h, i) => `<button data-act="lookHair" data-val="${i}">${esc(h)}</button>`).join('');
+    const skin = SKIN_TONES.map((c, i) => `<button class="swatch-btn" data-act="lookSkin" data-val="${i}" style="background:#${c.toString(16).padStart(6, '0')}" aria-label="Skin tone ${i + 1}"></button>`).join('');
+    const rk = RACKETS.map((r) => `<button class="opt racket" data-act="lookRacket" data-val="${r.id}"><i style="background:#${r.face.toString(16).padStart(6, '0')};border-color:#${r.accent.toString(16).padStart(6, '0')}"></i><span><b>${esc(r.name)}</b> <span class="mute">${esc(r.category)}</span><br><span class="mute">${esc(r.note)}</span></span></button>`).join('');
+    const el = this.openModal(`<h2>Equipment</h2><div class="equip">
+      <div class="equip-view"><canvas id="previewCanvas" width="320" height="380"></canvas>
+        <div class="row" style="flex-wrap:wrap"><button class="btn small" data-act="previewMode" data-val="character">Player</button><button class="btn small" data-act="previewMode" data-val="racket">Inspect racket</button><button class="btn small ghost" data-act="previewTeam">Team colour</button></div></div>
+      <div class="equip-opts">
+        <div class="label">Player</div><div class="optgrid">${arch}</div>
+        <div class="label">Hair</div><div class="seg wrap">${hair}</div>
+        <div class="label">Skin tone</div><div class="row">${skin}</div>
+        <div class="label">Racket <span class="mute">(cosmetic: no gameplay advantage)</span></div><div class="optgrid">${rk}</div>
+      </div></div>`);
+    el.querySelector('.modal').classList.add('wide');
+    this.markEquipment(look);
+    return el.querySelector('#previewCanvas');
+  }
+
+  markEquipment(look) {
+    const want = { lookArch: look.arch, lookHair: look.hair, lookSkin: look.skin, lookRacket: look.racket };
+    document.querySelectorAll('#modal [data-act^=look]').forEach((b) => b.classList.toggle('on', want[b.dataset.act] === +b.dataset.val));
+  }
 
   pauseMenu() {
     this.openModal(`<h2>Paused</h2><p class="mute" style="margin-bottom:14px">The match keeps running for the other players.</p>

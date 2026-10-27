@@ -15,6 +15,7 @@ export class Net {
     this.attempt = 0;
     this.token = store.get('padel.token');
     this.name = store.get('padel.name', '');
+    try { this.look = JSON.parse(store.get('padel.look', 'null')); } catch { this.look = null; }
     this.ws = null;
     this.closedByUs = false;
   }
@@ -35,7 +36,7 @@ export class Net {
     this.ws = ws;
     ws.onopen = () => {
       this.attempt = 0;
-      this.send({ t: 'hello', token: this.token, name: this.name || undefined });
+      this.send({ t: 'hello', token: this.token, name: this.name || undefined, look: this.look || undefined });
     };
     ws.onmessage = (e) => {
       let m;

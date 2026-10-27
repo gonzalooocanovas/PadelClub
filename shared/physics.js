@@ -136,9 +136,9 @@ export function stepBall(b, dt, events) {
     events.push({ type: 'floor', x: nx, z: nz, speed: Math.abs(b.vy) });
     // backspin (sb>0) bites: lower bounce, ball slows. Topspin (sb<0) kicks up and forward.
     const s = b.sb || 0;
-    b.vy = -b.vy * clamp(PHYS.FLOOR_E * (1 - 0.014 * s), 0.35, 0.95);
+    b.vy = -b.vy * clamp((b.fe ?? PHYS.FLOOR_E) * (1 - 0.014 * s), 0.35, 0.95);
     if (b.vy < 0.5) b.vy = 0;
-    const hf = clamp(PHYS.FLOOR_FRIC * (1 - 0.016 * s), 0.5, 1.02);
+    const hf = clamp((b.ff ?? PHYS.FLOOR_FRIC) * (1 - 0.016 * s), 0.5, 1.02);
     b.vx *= hf; b.vz *= hf;
     b.sb = s * 0.5; b.ss = (b.ss || 0) * 0.75;
   }

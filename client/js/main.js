@@ -4,6 +4,8 @@ import { Sound } from './audio.js';
 import { UI, toast } from './ui.js';
 import { MatchClient } from './game.js';
 import { settings, setSetting, onSetting } from './settings.js';
+import { Preview } from './preview.js';
+import { DEFAULT_LOOKS, sanitizeLook } from '/shared/looks.js';
 import { LocalMatch } from './local.js';
 import { DEFAULT_SETTINGS } from '/shared/constants.js';
 import { CAREER, starsFor, careerViewFrom, applyCareerResult } from '/shared/career.js';
@@ -26,6 +28,11 @@ let level = (() => { try { return localStorage.getItem('padel.level') || 'easy';
 let careerView = null;
 let openCareerAfterLeave = false;
 let wantCareer = false; // (server career messages are no longer used: career runs locally)
+const loadLook = () => { try { return sanitizeLook(JSON.parse(localStorage.getItem('padel.look') || 'null'), 0); } catch { return { ...DEFAULT_LOOKS[0] }; } };
+let myLook = loadLook();
+let court = (() => { try { return localStorage.getItem('padel.court') || 'indoor'; } catch { return 'indoor'; } })();
+let preview = null;
+let previewTeam = 0;
 let local = null; // running solo match (no network)
 let localCfg = null;
 const localProxy = { rtt: 0, send(m) { if (m.t === 'in') local?.pushInputs(m.inputs); } };
@@ -53,8 +60,10 @@ function showHome() {
   stopLocal();
   if (match) { match.stop(); match = null; }
   hud = null;
+  world.setCourt(court);
+  world.setLooks([myLook, ...DEFAULT_LOOKS.slice(1)]);
   const cv = careerViewFrom(loadCareer().done || {});
-  ui.home({ name: net.name, profile, status: net.status, joinCode: autoJoin || '', level, careerStars: cv.stars ? `${cv.stars}/${cv.max}` : null });
+  ui.home({ name: net.name, profile, status: net.status, joinCode: autoJoin || '', level, court, careerStars: cv.stars ? `${cv.stars}/${cv.max}` : null });
 }
 
 function lobbyReason() {
@@ -102,9 +111,14 @@ function startLocalMatch(cfg) {
     ? [me, 'AI', cfg.opponents?.[0] || 'AI', 'AI']
     : [me, cfg.partner || 'AI', cfg.opponents?.[0] || 'AI', cfg.opponents?.[1] || 'AI'];
   const diffs = ['', cfg.partnerDiff || cfg.difficulty, cfg.difficulty, cfg.difficulty];
+  const staged = !!cfg.stage;
+  const looks = cfg.mode === 'singles'
+    ? [myLook, DEFAULT_LOOKS[1], staged ? cfg.looks?.[0] : DEFAULT_LOOKS[2], DEFAULT_LOOKS[3]]
+    : [myLook, staged ? cfg.looks?.[0] : DEFAULT_LOOKS[1], staged ? cfg.looks?.[1] : DEFAULT_LOOKS[2], staged ? cfg.looks?.[2] : DEFAULT_LOOKS[3]];
+  s.court = cfg.court || court;
   room = { settings: s, hostId: 'local', you: 'local', slots: [], state: 'match', code: 'LOCAL' };
   local = new LocalMatch({
-    settings: s, names, diffs,
+    settings: s, names, diffs, looks: looks.map((l, i) => sanitizeLook(l, i)),
     onMessage: (m) => net.emit(m.t, m),
     onFinish: (results) => (cfg.stage ? finishCareer(cfg.stage, results) : null),
   });
@@ -147,6 +161,27 @@ function act(name, d, el) {
       try { localStorage.setItem('padel.level', level); } catch { /* optional */ }
       showHome();
       break;
+    case 'court': court = d.val; try { localStorage.setItem('padel.court', court); } catch { /* optional */ } showHome(); break;
+    case 'equipment': {
+      const canvas = ui.equipmentModal(myLook);
+      preview?.dispose();
+      preview = new Preview(canvas);
+      preview.setCharacter(myLook, previewTeam);
+      ui.onModalClose = () => { preview?.dispose(); preview = null; };
+      break;
+    }
+    case 'lookArch': case 'lookHair': case 'lookSkin': case 'lookRacket': {
+      const key = { lookArch: 'arch', lookHair: 'hair', lookSkin: 'skin', lookRacket: 'racket' }[name];
+      myLook = sanitizeLook({ ...myLook, [key]: +d.val }, 0);
+      try { localStorage.setItem('padel.look', JSON.stringify(myLook)); } catch { /* optional */ }
+      net.look = myLook;
+      net.send({ t: 'look', look: myLook });
+      ui.markEquipment(myLook);
+      if (preview) { if (preview.mode === 'racket') preview.setRacket(myLook.racket); else preview.setCharacter(myLook, previewTeam); }
+      break;
+    }
+    case 'previewMode': if (preview) { if (d.val === 'racket') preview.setRacket(myLook.racket); else preview.setCharacter(myLook, previewTeam); } break;
+    case 'previewTeam': previewTeam ^= 1; if (preview && preview.mode === 'character') preview.setCharacter(myLook, previewTeam); break;
     case 'career': showCareer(); break;
     case 'careerPlay': startCareer(+d.stage); break;
     case 'careerNext': startCareer((lastResults?.career?.stage || 0) + 1); break;
@@ -279,6 +314,8 @@ net.on('room', (m) => {
 net.on('start', (m) => {
   if (match) match.stop();
   ui.clear();
+  world.setCourt(m.settings.court || 'indoor');
+  world.setLooks(m.looks);
   rematchVotes = [];
   hud = ui.showHud(m.names, m.settings);
   world.setSingles(m.settings.mode === 'singles');

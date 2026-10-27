@@ -6,6 +6,9 @@ import { RenderPass } from '/vendor/three/examples/jsm/postprocessing/RenderPass
 import { UnrealBloomPass } from '/vendor/three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from '/vendor/three/examples/jsm/postprocessing/OutputPass.js';
 import { COURT } from '/shared/constants.js';
+import { DEFAULT_LOOKS } from '/shared/looks.js';
+import { buildCharacter, disposeCharacter } from './characters.js';
+import { buildEnvironment } from './envs.js';
 import { netHeight } from '/shared/physics.js';
 
 const TEAM_COLORS = [0xf2f5f8, 0x3d78c4]; // team A white, team B blue
@@ -22,10 +25,10 @@ function canvasTex(w, h, draw, { repeat, aniso = 4 } = {}) {
   return t;
 }
 
-function turfTexture() {
+function turfTexture(base = '#2b5f94') {
   const W = 1024, H = 2048; // 102.4 px per metre
   return canvasTex(W, H, (g) => {
-    g.fillStyle = '#2b5f94'; g.fillRect(0, 0, W, H);
+    g.fillStyle = base; g.fillRect(0, 0, W, H);
     for (let i = 0; i < 60000; i++) { // fibre speckle
       const x = Math.random() * W, y = Math.random() * H;
       g.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,.035)' : 'rgba(0,0,0,.06)';
@@ -52,14 +55,16 @@ function meshTexture() {
   }, { repeat: [1, 1] });
 }
 
-function bannerTexture() {
+/** A horizontal advertising board / sign texture (1024x128). */
+function bannerTexture(text = 'PADEL CLUB', bg = '#0d141d', fg = '#eef3f8', sub = 'INDOOR · DOUBLES') {
   return canvasTex(1024, 128, (g, w, h) => {
-    g.fillStyle = '#0d141d'; g.fillRect(0, 0, w, h);
+    g.fillStyle = bg; g.fillRect(0, 0, w, h);
     g.fillStyle = '#d4f23c'; g.beginPath(); g.arc(70, 64, 26, 0, Math.PI * 2); g.fill();
-    g.fillStyle = '#eef3f8'; g.font = '800 62px Segoe UI, Arial'; g.textBaseline = 'middle';
-    g.fillText('PADEL CLUB', 120, 68);
-    g.fillStyle = '#3d6492'; g.fillRect(560, 40, 4, 48);
-    g.fillStyle = '#8d9bb1'; g.font = '600 34px Segoe UI, Arial'; g.fillText('INDOOR · DOUBLES', 590, 66);
+    g.fillStyle = fg; g.font = '800 62px Segoe UI, Arial'; g.textBaseline = 'middle';
+    g.fillText(text, 120, 68);
+    const x = 120 + g.measureText(text).width + 40;
+    g.fillStyle = '#3d6492'; g.fillRect(x, 40, 4, 48);
+    g.fillStyle = fg; g.globalAlpha = 0.6; g.font = '600 34px Segoe UI, Arial'; g.fillText(sub, x + 30, 66); g.globalAlpha = 1;
   });
 }
 
@@ -105,10 +110,11 @@ export class World {
     this.backWall = this.courtGroup.children.filter((c) => c.geometry && Math.abs(Math.abs(c.position.z) - 10) < 0.02 && Math.abs(c.rotation.y) < 0.01 && c.position.y < 5);
     this.buildBall();
     this.buildMarkers();
-    this.buildCrowd();
+    this.crowds = [];
     this.buildFx();
     this.buildEnv();
-    for (let s = 0; s < 4; s++) { const p = this.makePlayer(s >> 1); this.players.push(p); this.scene.add(p.root); }
+    this.setLooks(DEFAULT_LOOKS);
+    this.setCourt('indoor');
     this.setQuality('medium');
     this.resize();
     this.clock = 0;
@@ -145,7 +151,8 @@ export class World {
   }
 
   buildLights() {
-    this.scene.add(new THREE.HemisphereLight(0xcfe0ff, 0x1a2230, 0.95));
+    this.hemi = new THREE.HemisphereLight(0xcfe0ff, 0x1a2230, 0.95);
+    this.scene.add(this.hemi);
     const sun = new THREE.DirectionalLight(0xfff4e0, 1.7);
     sun.position.set(7, 20, 5);
     sun.target.position.set(0, 0, 0);
@@ -166,24 +173,14 @@ export class World {
     const out = new THREE.Mesh(new THREE.PlaneGeometry(90, 90), new THREE.MeshStandardMaterial({ color: 0x151d29, roughness: 0.95 }));
     out.rotation.x = -Math.PI / 2; out.position.y = -0.01; out.receiveShadow = true;
     s.add(out);
+    this.outFloor = out;
     // playing surface
     const turf = new THREE.Mesh(new THREE.PlaneGeometry(10, 20), new THREE.MeshStandardMaterial({ map: turfTexture(), roughness: 0.92 }));
 turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
     const bump = canvasTex(128, 128, (g, w, h) => { for (let i = 0; i < 2600; i++) { g.fillStyle = `rgba(${Math.random() * 255 | 0},${Math.random() * 255 | 0},${Math.random() * 255 | 0},.5)`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); } }, { repeat: [10, 20] });
     turf.material.bumpMap = bump; turf.material.bumpScale = 0.6;
     s.add(turf);
-    // advertising boards around the court
-    const adTex = bannerTexture(); adTex.wrapS = THREE.RepeatWrapping; adTex.repeat.set(2.8, 1);
-    const adMat = new THREE.MeshBasicMaterial({ map: adTex });
-    for (const sx of [-1, 1]) {
-      const ad = new THREE.Mesh(new THREE.PlaneGeometry(20, 0.9), adMat);
-      ad.position.set(sx * 6.05, 0.45, 0); ad.rotation.y = -sx * Math.PI / 2; s.add(ad);
-    }
-    for (const sz of [-1, 1]) {
-      const ad = new THREE.Mesh(new THREE.PlaneGeometry(12, 0.9), adMat);
-      ad.position.set(0, 0.45, sz * 10.9); ad.rotation.y = sz > 0 ? Math.PI : 0; s.add(ad);
-    }
-
+    this.turfMesh = turf;
     const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xaecde6, transparent: true, opacity: 0.13, roughness: 0.05, metalness: 0, side: THREE.DoubleSide, depthWrite: false });
     const steel = new THREE.MeshStandardMaterial({ color: 0x9aa7b8, metalness: 0.7, roughness: 0.4 });
     const mt = meshTexture();
@@ -275,24 +272,6 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
       const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.07, 10), new THREE.MeshStandardMaterial({ color: ACCENT, roughness: 0.5 }));
       knob.rotation.z = Math.PI / 2; knob.position.set(sx * 5.1, 0.55, 0); s.add(knob);
     }
-
-    // club room backdrop + overhead light bars
-    const bn = bannerTexture();
-    for (const sz of [-1, 1]) {
-      const wall = new THREE.Mesh(new THREE.BoxGeometry(34, 9, 0.5), new THREE.MeshStandardMaterial({ color: 0x0f1620, roughness: 0.9 }));
-      wall.position.set(0, 4.5, sz * 17); this.scene.add(wall);
-      const b = new THREE.Mesh(new THREE.PlaneGeometry(14, 1.75), new THREE.MeshBasicMaterial({ map: bn }));
-      b.position.set(0, 6.2, sz * 16.7); b.rotation.y = sz > 0 ? Math.PI : 0; this.scene.add(b);
-    }
-    for (const sx of [-1, 1]) {
-      const wall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 9, 34), new THREE.MeshStandardMaterial({ color: 0x0f1620, roughness: 0.9 }));
-      wall.position.set(sx * 11, 4.5, 0); this.scene.add(wall);
-    }
-    const barMat = new THREE.MeshBasicMaterial({ color: 0xeaf2ff });
-    for (const z of [-7, 0, 7]) for (const x of [-2.6, 2.6]) {
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.08, 4.2), barMat);
-      bar.position.set(x, 8.2, z); s.add(bar);
-    }
   }
 
   buildBall() {
@@ -356,135 +335,25 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
    * Jointed athlete: pelvis → spine (twist/lean) → shoulders → elbows, and hip → knee → foot per leg.
    * Poses are driven by a small parameter vector (see READY) so every shot is a set of keyframes.
    */
-  makePlayer(team) {
-    const idx = this.players.length; // 0..3: each athlete gets their own look
-    const shirtCol = TEAM_COLORS[team];
-    const shirt = new THREE.MeshStandardMaterial({ color: shirtCol, roughness: 0.62 });
-    const trim = new THREE.MeshStandardMaterial({ color: team === 0 ? 0x1c2735 : 0xf2f5f8, roughness: 0.7 });
-    const accent = new THREE.MeshStandardMaterial({ color: ACCENT, roughness: 0.55 });
-    const shorts = new THREE.MeshStandardMaterial({ color: team === 0 ? 0x1c2735 : 0x0f2038, roughness: 0.8 });
-    const skinTone = [0xc89878, 0x8d5a3c, 0xe0b799, 0xa87450][idx % 4];
-    const skin = new THREE.MeshStandardMaterial({ color: skinTone, roughness: 0.7 });
-    const hairCol = [0x1b1410, 0x4a3320, 0x0d0d0d, 0x9a6a2a][(idx + team) % 4];
-    const hair = new THREE.MeshStandardMaterial({ color: hairCol, roughness: 0.85 });
-    const shoe = new THREE.MeshStandardMaterial({ color: 0xf4f4f4, roughness: 0.5 });
-    const sole = new THREE.MeshStandardMaterial({ color: ACCENT, roughness: 0.6 });
-    const sock = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9 });
-    const dark = new THREE.MeshStandardMaterial({ color: 0x14171c, roughness: 0.6 });
-    const cast = (m) => { m.castShadow = true; return m; };
-    const cap = (r, len, mat) => cast(new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 4, 12), mat));
-    const taper = (rt, rb, h, mat, seg = 14) => cast(new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat));
-    const ball = (r, mat) => cast(new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), mat));
+  makePlayer(team, look) {
+    const rig = buildCharacter(look, team);
+    rig.cur = READY.slice();
+    return rig;
+  }
 
-    const root = new THREE.Group();
-    root.scale.setScalar([1.0, 0.96, 1.04, 0.99][idx % 4]);
-    const hips = new THREE.Group(); root.add(hips);
-
-    // pelvis + shorts with waistband
-    const pelvis = new THREE.Mesh(new THREE.LatheGeometry([[0.0, -0.1], [0.15, -0.1], [0.17, -0.02], [0.155, 0.06], [0.0, 0.06]].map(([x, y]) => new THREE.Vector2(x, y)), 18), shorts);
-    pelvis.scale.z = 0.8; cast(pelvis); hips.add(pelvis);
-    const waist = new THREE.Mesh(new THREE.TorusGeometry(0.153, 0.014, 6, 24), accent);
-    waist.rotation.x = Math.PI / 2; waist.position.y = 0.055; waist.scale.set(1, 0.8, 1); hips.add(waist);
-
-    // legs: tapered thigh/calf, short shorts, sock, sculpted shoe with laces
-    const leg = (sx) => {
-      const thigh = new THREE.Group(); thigh.position.set(sx * 0.095, -0.03, 0); hips.add(thigh);
-      const th = taper(0.088, 0.062, 0.44, skin); th.position.y = -0.21; thigh.add(th);
-      const hem = taper(0.1, 0.098, 0.26, shorts, 16); hem.position.y = -0.13; thigh.add(hem);
-      const hemTrim = new THREE.Mesh(new THREE.TorusGeometry(0.099, 0.008, 5, 16), accent); hemTrim.rotation.x = Math.PI / 2; hemTrim.position.y = -0.26; thigh.add(hemTrim);
-      const knee = new THREE.Group(); knee.position.y = -0.44; thigh.add(knee);
-      const kc = ball(0.058, skin); knee.add(kc);
-      const sh = taper(0.058, 0.04, 0.42, skin); sh.position.y = -0.21; knee.add(sh);
-      const calf = ball(0.062, skin); calf.position.set(0, -0.14, -0.012); calf.scale.set(1, 1.5, 1); knee.add(calf);
-      const sk = taper(0.045, 0.048, 0.13, sock); sk.position.y = -0.37; knee.add(sk);
-      const foot = new THREE.Group(); foot.position.y = -0.44; knee.add(foot);
-      const f = cast(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.07, 0.17), shoe)); f.position.set(0, -0.03, 0.03); foot.add(f);
-      const toe = ball(0.052, shoe); toe.scale.set(1, 0.72, 1.35); toe.position.set(0, -0.035, 0.12); foot.add(toe);
-      const lace = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.012, 0.09), accent); lace.position.set(0, 0.008, 0.06); foot.add(lace);
-      const so = new THREE.Mesh(new THREE.BoxGeometry(0.108, 0.02, 0.26), sole); so.position.set(0, -0.075, 0.06); foot.add(so);
-      return { thigh, knee, foot };
-    };
-    const legL = leg(1), legR = leg(-1);
-
-    // torso: tapered chest from a lathe profile
-    const spine = new THREE.Group(); spine.position.y = 0.06; hips.add(spine);
-    const prof = [[0.001, 0], [0.135, 0.01], [0.14, 0.08], [0.15, 0.18], [0.17, 0.3], [0.19, 0.4], [0.195, 0.47], [0.17, 0.54], [0.09, 0.6], [0.05, 0.635], [0.001, 0.64]].map(([x, y]) => new THREE.Vector2(x, y));
-    const torso = cast(new THREE.Mesh(new THREE.LatheGeometry(prof, 22), shirt)); torso.scale.z = 0.7; spine.add(torso);
-    const stripe = new THREE.Mesh(new THREE.TorusGeometry(0.152, 0.012, 5, 22), trim); stripe.rotation.x = Math.PI / 2; stripe.position.y = 0.18; stripe.scale.set(1, 0.7, 1); spine.add(stripe);
-    const collar = new THREE.Mesh(new THREE.TorusGeometry(0.058, 0.014, 6, 16), trim); collar.rotation.x = Math.PI / 2; collar.position.y = 0.62; spine.add(collar);
-    const numTex = canvasTex(64, 64, (g, w, h) => { g.clearRect(0, 0, w, h); g.fillStyle = team === 0 ? '#1c2735' : '#f2f5f8'; g.font = '800 40px Segoe UI, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String((idx * 7 + 3) % 99), 32, 34); });
-    const num = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), new THREE.MeshBasicMaterial({ map: numTex, transparent: true, depthWrite: false }));
-    num.position.set(0, 0.36, -0.136); num.rotation.y = Math.PI; spine.add(num);
-    const neck = taper(0.042, 0.05, 0.1, skin, 10); neck.position.y = 0.67; spine.add(neck);
-
-    // head: face, ears, hair style by athlete
-    const head = new THREE.Group(); head.position.y = 0.78; spine.add(head);
-    const skull = cast(new THREE.Mesh(new THREE.SphereGeometry(0.105, 24, 18), skin)); skull.scale.set(0.9, 1.06, 1); head.add(skull);
-    const jaw = ball(0.07, skin); jaw.scale.set(1, 0.85, 0.95); jaw.position.set(0, -0.055, 0.03); head.add(jaw);
-    const nose = ball(0.016, skin); nose.scale.set(0.9, 1.1, 1.2); nose.position.set(0, -0.008, 0.108); head.add(nose);
-    for (const sx of [-1, 1]) {
-      const eye = ball(0.012, new THREE.MeshStandardMaterial({ color: 0xffffff })); eye.position.set(sx * 0.036, 0.018, 0.092); eye.scale.z = 0.6; head.add(eye);
-      const pupil = ball(0.0065, dark); pupil.position.set(sx * 0.036, 0.018, 0.098); head.add(pupil);
-      const brow = new THREE.Mesh(new THREE.BoxGeometry(0.034, 0.007, 0.008), hair); brow.position.set(sx * 0.036, 0.04, 0.097); brow.rotation.z = -sx * 0.12; head.add(brow);
-      const ear = ball(0.02, skin); ear.scale.set(0.5, 1, 0.8); ear.position.set(sx * 0.095, 0, 0); head.add(ear);
+  /** (Re)build the four athletes from their looks. Unchanged looks keep their rig. */
+  setLooks(looks) {
+    for (let i = 0; i < 4; i++) {
+      const look = looks?.[i] || DEFAULT_LOOKS[i];
+      const key = JSON.stringify(look);
+      if (this.players[i] && this.players[i].lookKey === key) continue;
+      const old = this.players[i];
+      if (old) { this.scene.remove(old.root); disposeCharacter(old); }
+      const rig = this.makePlayer(i >> 1, look);
+      rig.lookKey = key;
+      this.players[i] = rig;
+      this.scene.add(rig.root);
     }
-    const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.005, 0.006), new THREE.MeshStandardMaterial({ color: 0x7a3a3a })); mouth.position.set(0, -0.05, 0.1); head.add(mouth);
-    const style = idx % 4;
-    const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.112, 22, 12, 0, Math.PI * 2, 0, Math.PI * (style === 0 ? 0.5 : 0.58)), hair);
-    hairCap.position.y = 0.012; hairCap.rotation.x = -0.3; hairCap.castShadow = true; head.add(hairCap);
-    if (style === 1) { // ponytail
-      const tail = cap(0.03, 0.14, hair); tail.position.set(0, -0.03, -0.13); tail.rotation.x = 0.35; head.add(tail);
-      const tie = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.008, 5, 10), accent); tie.position.set(0, 0.03, -0.115); head.add(tie);
-    } else if (style === 2) { // bun
-      const bun = ball(0.05, hair); bun.position.set(0, 0.11, -0.04); head.add(bun);
-    } else if (style === 3) { // curls
-      for (let i = 0; i < 9; i++) { const c = ball(0.034, hair); const a = (i / 9) * Math.PI * 2; c.position.set(Math.sin(a) * 0.1, 0.06 + (i % 2) * 0.03, Math.cos(a) * 0.09 - 0.02); head.add(c); }
-    }
-    const band = new THREE.Mesh(new THREE.TorusGeometry(0.108, 0.011, 6, 22), team === 0 ? trim : accent);
-    band.rotation.x = Math.PI / 2 + 0.1; band.position.y = 0.05; head.add(band);
-
-    // arms: short sleeve, tapered arm, wristband, hand with thumb
-    const arm = (sx, racketHand) => {
-      const sh = new THREE.Group(); sh.position.set(sx * 0.215, 0.53, 0); sh.rotation.order = 'YXZ'; spine.add(sh);
-      sh.add(ball(0.06, shirt));
-      const up = taper(0.05, 0.04, 0.3, skin); up.position.y = -0.15; sh.add(up);
-      const sleeve = taper(0.062, 0.058, 0.15, shirt); sleeve.position.y = -0.09; sh.add(sleeve);
-      const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.008, 5, 14), accent); cuff.rotation.x = Math.PI / 2; cuff.position.y = -0.165; sh.add(cuff);
-      const elbow = new THREE.Group(); elbow.position.y = -0.31; sh.add(elbow);
-      elbow.add(ball(0.04, skin));
-      const fa = taper(0.04, 0.03, 0.29, skin); fa.position.y = -0.16; elbow.add(fa);
-      const wb = taper(0.034, 0.034, 0.045, racketHand ? accent : trim); wb.position.y = -0.285; elbow.add(wb);
-      const hand = new THREE.Group(); hand.position.y = -0.335; elbow.add(hand);
-      const palm = ball(0.04, skin); palm.scale.set(0.9, 1.2, 0.65); hand.add(palm);
-      const thumb = ball(0.014, skin); thumb.scale.set(1, 1.8, 1); thumb.position.set(-sx * 0.035, 0.0, 0.02); thumb.rotation.z = sx * 0.5; hand.add(thumb);
-      return { sh, elbow, hand };
-    };
-    const armL = arm(1, false), armR = arm(-1, true); // the player's right hand is local -x
-
-    // padel racket: solid perforated face, no strings; held in the right hand
-    const racket = new THREE.Group(); racket.position.y = -0.335; armR.elbow.add(racket);
-    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.019, 0.022, 0.2, 10), new THREE.MeshStandardMaterial({ color: 0x15181d, roughness: 0.9 }));
-    racket.add(grip);
-    const neckBar = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.016, 0.1, 8), accent); neckBar.position.y = -0.13; racket.add(neckBar);
-    const shape = new THREE.Shape(); shape.absellipse(0, 0, 0.125, 0.16, 0, Math.PI * 2);
-    const frame = cast(new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.036, bevelEnabled: false }), new THREE.MeshStandardMaterial({ color: ACCENT, roughness: 0.4, metalness: 0.15 })));
-    frame.position.set(0, -0.3, -0.018); racket.add(frame);
-    const faceTex = canvasTex(64, 64, (g, w, h) => {
-      g.fillStyle = '#181d24'; g.fillRect(0, 0, w, h);
-      g.fillStyle = '#3b4656';
-      for (let y = 4; y < h; y += 8) for (let x = 4 + ((y / 8) % 2) * 4; x < w; x += 8) { g.beginPath(); g.arc(x, y, 1.7, 0, 6.3); g.fill(); }
-    });
-    const face = new THREE.Mesh(new THREE.CircleGeometry(0.115, 24), new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.5, side: THREE.DoubleSide }));
-    face.scale.y = 1.28; face.position.set(0, -0.3, 0.02); racket.add(face);
-    const face2 = face.clone(); face2.position.z = -0.02; racket.add(face2);
-
-    const blob = new THREE.Mesh(this.blobGeo || (this.blobGeo = new THREE.CircleGeometry(0.5, 20)), this.blobMat || (this.blobMat = new THREE.MeshBasicMaterial({ map: canvasTex(64, 64, (g, w, h) => { const gr = g.createRadialGradient(w / 2, h / 2, 2, w / 2, h / 2, w / 2); gr.addColorStop(0, 'rgba(0,0,0,.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }), transparent: true, depthWrite: false })));
-    blob.rotation.x = -Math.PI / 2; blob.position.y = 0.02; root.add(blob);
-    return {
-      root, blob, hips, spine, head, legL, legR, armL, armR, racket,
-      team, phase: Math.random() * 6, idlePh: Math.random() * 6, yaw: team === 0 ? 0 : Math.PI,
-      cur: READY.slice(), split: 0, lastY: 0,
-    };
   }
 
   /** Interpolate the keyframes of a swing at time t (seconds since the swing began). */
@@ -493,7 +362,7 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
     const keys = [from, K[0], K[1], K[2]];
     const times = [0, 0.075, 0.17, 0.42];
     let i = 0;
-    while (i < 3 && t > times[i + 1]) i++;
+    while (i < 2 && t > times[i + 1]) i++; // the last segment (contact → follow-through) also covers t beyond its end
     const f = Math.min(1, Math.max(0, (t - times[i]) / (times[i + 1] - times[i])));
     const e = f * f * (3 - 2 * f);
     return keys[i].map((v, k) => v + (keys[i + 1][k] - v) * e);
@@ -779,36 +648,41 @@ if (swinging) {
 
   // ------------------------------------------------------------------ crowd + reflections
 
-  buildCrowd() {
-    const rows = 5;
-    const stepMat = new THREE.MeshStandardMaterial({ color: 0x141c28, roughness: 0.9 });
-    const bodies = [];
-    for (const sx of [-1, 1]) {
-      for (let r = 0; r < rows; r++) {
-        const h = 0.45 * (r + 1);
-        const x = sx * (6.6 + r * 1.05);
-        const step = new THREE.Mesh(new THREE.BoxGeometry(1.05, h, 24), stepMat);
-        step.position.set(x, h / 2, 0); step.receiveShadow = true; this.scene.add(step);
-        for (let z = -11; z <= 11; z += 0.62) {
-          if (Math.random() < 0.3) continue;
-          bodies.push([x + (Math.random() - 0.5) * 0.15, h + 0.3, z + (Math.random() - 0.5) * 0.15, sx]);
-        }
+  /**
+   * Stands with instanced spectators. cfg: rows, sides, back, density (0..1), pal (colours), xBase, rowStep, stepH, stepMat.
+   * Everything is added to `group` so it is disposed with the environment.
+   */
+  makeCrowd(group, cfg = {}) {
+    const { rows = 5, sides = true, back = false, density = 0.7, xBase = 6.6, rowStep = 1.05, stepH = 0.45 } = cfg;
+    const pal = cfg.pal || [0x2f4a6b, 0x6b2f3a, 0x3d6b52, 0x7a6a3a, 0x4b4b5e, 0x8a8f99, 0x253244];
+    const stepMat = cfg.stepMat || new THREE.MeshStandardMaterial({ color: 0x141c28, roughness: 0.9 });
+    const people = [];
+    const row = (x, z, along, r, rotY) => {
+      const h = stepH * (r + 1);
+      const step = new THREE.Mesh(new THREE.BoxGeometry(along ? 24 : rowStep, h, along ? rowStep : 24), stepMat);
+      step.position.set(x, h / 2, z); step.receiveShadow = true; group.add(step);
+      for (let t = -11; t <= 11; t += 0.62) {
+        if (Math.random() > density) continue;
+        const j = (Math.random() - 0.5) * 0.15;
+        people.push(along ? [t + j, h + 0.3, z + j, rotY] : [x + j, h + 0.3, t + j, rotY]);
       }
-    }
-    const bm = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.17, 0.25, 3, 8), new THREE.MeshStandardMaterial({ roughness: 0.9 }), bodies.length);
-    const hm = new THREE.InstancedMesh(new THREE.SphereGeometry(0.115, 10, 8), new THREE.MeshStandardMaterial({ roughness: 0.8 }), bodies.length);
-    const pal = [0x2f4a6b, 0x6b2f3a, 0x3d6b52, 0x7a6a3a, 0x4b4b5e, 0x8a8f99, 0x253244];
+    };
+    if (sides) for (const sx of [-1, 1]) for (let r = 0; r < rows; r++) row(sx * (xBase + r * rowStep), 0, false, r, sx > 0 ? -Math.PI / 2 : Math.PI / 2);
+    if (back) for (const sz of [-1, 1]) for (let r = 0; r < rows; r++) row(0, sz * (13.5 + r * rowStep), true, r, sz > 0 ? Math.PI : 0);
+    if (!people.length) return;
+    const bm = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.17, 0.25, 3, 8), new THREE.MeshStandardMaterial({ roughness: 0.9 }), people.length);
+    const hm = new THREE.InstancedMesh(new THREE.SphereGeometry(0.115, 10, 8), new THREE.MeshStandardMaterial({ roughness: 0.8 }), people.length);
     const skins = [0xc89878, 0x8d5a3c, 0xe0b799, 0xa87450];
     const m4 = new THREE.Matrix4(), col = new THREE.Color();
-    this.crowdPhase = [];
-    bodies.forEach(([x, y, z, sx], i) => {
-      m4.makeRotationY(sx > 0 ? -Math.PI / 2 : Math.PI / 2).setPosition(x, y, z);
+    const phase = [];
+    people.forEach(([x, y, z, ry], i) => {
+      m4.makeRotationY(ry).setPosition(x, y, z);
       bm.setMatrixAt(i, m4); bm.setColorAt(i, col.setHex(pal[(Math.random() * pal.length) | 0]));
       m4.setPosition(x, y + 0.36, z); hm.setMatrixAt(i, m4); hm.setColorAt(i, col.setHex(skins[(Math.random() * skins.length) | 0]));
-      this.crowdPhase.push(Math.random() * 6);
+      phase.push(Math.random() * 6);
     });
-    this.crowdBodies = bm; this.crowdHeads = hm; this.crowdBase = bodies;
-    this.scene.add(bm, hm);
+    group.add(bm, hm);
+    this.crowds.push({ bm, hm, people, phase });
   }
 
   cheerCrowd() { this.cheerT = 1.6; }
@@ -818,14 +692,87 @@ if (swinging) {
     this.cheerT -= this.dt;
     const m4 = new THREE.Matrix4();
     const amp = Math.max(0, Math.min(1, this.cheerT)) * 0.18;
-    this.crowdBase.forEach(([x, y, z, sx], i) => {
-      const hop = Math.abs(Math.sin(this.clock * 9 + this.crowdPhase[i])) * amp;
-      m4.makeRotationY(sx > 0 ? -Math.PI / 2 : Math.PI / 2).setPosition(x, y + hop, z);
-      this.crowdBodies.setMatrixAt(i, m4);
-      m4.setPosition(x, y + 0.36 + hop, z); this.crowdHeads.setMatrixAt(i, m4);
+    for (const c of this.crowds) {
+      c.people.forEach(([x, y, z, ry], i) => {
+        const hop = Math.abs(Math.sin(this.clock * 9 + c.phase[i])) * amp;
+        m4.makeRotationY(ry).setPosition(x, y + hop, z); c.bm.setMatrixAt(i, m4);
+        m4.setPosition(x, y + 0.36 + hop, z); c.hm.setMatrixAt(i, m4);
+      });
+      c.bm.instanceMatrix.needsUpdate = true; c.hm.instanceMatrix.needsUpdate = true;
+    }
+  }
+
+  // ------------------------------------------------------------------ courts (environments)
+
+  adTexture(text, bg, fg, sub) { return bannerTexture(text, bg, fg, sub); }
+
+  skylineTexture() {
+    return canvasTex(512, 128, (g, w, h) => {
+      g.clearRect(0, 0, w, h); g.fillStyle = '#0a0e16';
+      let x = 0;
+      while (x < w) {
+        const bw = 18 + Math.random() * 40, bh = 30 + Math.random() * 90;
+        g.fillRect(x, h - bh, bw, bh);
+        g.fillStyle = 'rgba(255,214,140,.8)';
+        for (let yy = h - bh + 6; yy < h - 4; yy += 9) for (let xx = x + 4; xx < x + bw - 4; xx += 8) if (Math.random() < 0.35) g.fillRect(xx, yy, 3, 4);
+        g.fillStyle = '#0a0e16'; x += bw + 2;
+      }
     });
-    this.crowdBodies.instanceMatrix.needsUpdate = true;
-    this.crowdHeads.instanceMatrix.needsUpdate = true;
+  }
+
+  /** Switch the whole environment: surroundings, lighting, turf colour and advertising. */
+  setCourt(id) {
+    if (this.courtId === id) return;
+    this.courtId = id;
+    if (this.envGroup) {
+      this.scene.remove(this.envGroup);
+      this.envGroup.traverse((o) => { o.geometry?.dispose(); (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { if (m) { m.map?.dispose(); m.dispose(); } }); });
+    }
+    this.crowds = [];
+    const env = buildEnvironment(id, this);
+    this.envGroup = env.group;
+    this.scene.add(env.group);
+    this.applyLight(env.light);
+    this.setTurf(env.turf);
+    this.buildAds(env.ads);
+  }
+
+  applyLight(l) {
+    if (l.background2D) this.scene.background = l.bg; else this.scene.background = new THREE.Color(l.bg);
+    this.scene.fog = new THREE.Fog(l.fog[0], l.fog[1], l.fog[2]);
+    this.hemi.color.set(l.hemi[0]); this.hemi.groundColor.set(l.hemi[1]); this.hemi.intensity = l.hemi[2];
+    this.sun.color.set(l.sun.color); this.sun.intensity = l.sun.intensity; this.sun.position.set(...l.sun.pos);
+    this.renderer.toneMappingExposure = l.exposure;
+    this.scene.environmentIntensity = l.envIntensity;
+  }
+
+  setTurf(t) {
+    const mat = this.turfMesh.material;
+    mat.map?.dispose();
+    mat.map = turfTexture(t.base);
+    mat.needsUpdate = true;
+    const om = this.outFloor.material;
+    om.map?.dispose(); om.map = null;
+    om.color.set(t.out.color); om.roughness = t.out.rough;
+    if (t.out.tiles) {
+      om.color.set(0xffffff);
+      om.map = canvasTex(256, 256, (g, w, h) => {
+        g.fillStyle = '#b86a42'; g.fillRect(0, 0, w, h);
+        for (let y = 0; y < h; y += 64) for (let x = 0; x < w; x += 64) { g.fillStyle = `rgba(${150 + Math.random() * 50 | 0},${70 + Math.random() * 30 | 0},40,.45)`; g.fillRect(x + 2, y + 2, 60, 60); }
+        g.strokeStyle = 'rgba(60,30,18,.55)'; g.lineWidth = 3; for (let i = 0; i <= w; i += 64) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i, h); g.moveTo(0, i); g.lineTo(w, i); g.stroke(); }
+      }, { repeat: [14, 14] });
+    }
+    om.needsUpdate = true;
+  }
+
+  buildAds(a) {
+    if (this.adGroup) { this.courtGroup.remove(this.adGroup); this.adGroup.traverse((o) => { o.geometry?.dispose(); o.material?.map?.dispose(); o.material?.dispose(); }); }
+    const g = new THREE.Group();
+    const tex = bannerTexture(a.text, a.bg, a.fg, a.sub); tex.wrapS = THREE.RepeatWrapping; tex.repeat.set(2.8, 1);
+    const mat = new THREE.MeshBasicMaterial({ map: tex });
+    for (const sx of [-1, 1]) { const ad = new THREE.Mesh(new THREE.PlaneGeometry(20, 0.9), mat); ad.position.set(sx * 6.05, 0.45, 0); ad.rotation.y = -sx * Math.PI / 2; g.add(ad); }
+    for (const sz of [-1, 1]) { const ad = new THREE.Mesh(new THREE.PlaneGeometry(12, 0.9), mat); ad.position.set(0, 0.45, sz * 10.9); ad.rotation.y = sz > 0 ? Math.PI : 0; g.add(ad); }
+    this.adGroup = g; this.courtGroup.add(g);
   }
 
   /** Short field-of-view kick on powerful hits. */

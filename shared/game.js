@@ -7,6 +7,7 @@ import {
 import {
   stepPlayer, stepBall, makeBall, solveLaunch, simulateShot, serveLimit,
 } from './physics.js';
+import { COURTS } from './looks.js';
 import {
   createMatch, pointWon, currentServer, serveSide, scoreView,
 } from './scoring.js';
@@ -41,6 +42,9 @@ export class PadelGame {
     }));
     this.ball = makeBall();
     this.ball.hw = this.singles ? 3.5 : COURT.HALF_W;
+    const surf = (COURTS[this.settings.court] || COURTS.indoor).surface; // each court has its own turf
+    this.ball.fe = surf.floorE;
+    this.ball.ff = surf.floorFric;
     this.events = [];
     this.time = 0;
     this.tickNo = 0;

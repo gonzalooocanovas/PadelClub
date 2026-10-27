@@ -28,6 +28,8 @@ Requires Node 20+. No build step: the client is plain ES modules served by the s
 
 **Public rooms**: the host can set *Room visibility → Public* in the lobby; open lobbies appear under *Rooms* on the home screen for one-click joining.
 
+**Courts and equipment**: three environments (Premium Indoor Club, Mediterranean Court, Night Arena), chosen by the host in the lobby or on the home screen for solo play; the turf differs slightly (outdoor is a few percent slower). *Equipment* lets you pick one of 4 player archetypes, hair, skin and one of 8 cosmetic rackets, with a live 3D preview. Your look is shown to the other players. See DEV_CHECKLIST.md for what is and is not done.
+
 **Practice vs AI** starts a room with you and three bots. Empty seats are only ever filled by clearly labelled AI.
 
 ### Controls
@@ -106,7 +108,7 @@ Use four browsers/devices (or three browser profiles plus one incognito window).
 8. Throttle one browser (DevTools → Network → Slow 3G) and confirm it stays playable and others are unaffected.
 
 ## Deployment
-Single Node service + a persistent disk.
+Single Node service + a persistent disk. **Region:** the Blueprint targets Frankfurt (EU). Render cannot change the region of an existing service, so delete the old service and create it again from the Blueprint.
 - **Docker** (any container host, Fly.io, Railway, Render, a VPS): `docker build -t padel-club . && docker run -p 3000:3000 -v padel-data:/data padel-club`
 - Put it behind HTTPS (the client automatically uses `wss://` on `https://` pages). Your proxy must allow WebSocket upgrades on `/ws` and keep idle connections open > 30 s.
 - Environment: see `.env.example` (`PORT`, `DATA_DIR`). No secrets are required.

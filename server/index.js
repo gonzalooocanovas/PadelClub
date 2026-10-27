@@ -10,6 +10,7 @@ import { Store } from './store.js';
 import { RoomManager } from './rooms.js';
 import { SERVER_TICK } from '../shared/constants.js';
 import { CAREER } from '../shared/career.js';
+import { sanitizeLook } from '../shared/looks.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MIME = {
@@ -106,6 +107,7 @@ export function createGameServer({ port = 0, dataDir = process.env.DATA_DIR || p
       const prof = store.profile(token, String(msg.name || '').slice(0, 16) || undefined);
       c.token = token;
       c.name = prof.name;
+      c.look = msg.look ? sanitizeLook(msg.look) : null;
       send(ws, { t: 'welcome', token, name: prof.name, profile: store.publicProfile(token) });
       const ms = rooms.membership(token);
       if (ms) {
@@ -131,6 +133,12 @@ export function createGameServer({ port = 0, dataDir = process.env.DATA_DIR || p
       return send(ws, { t: 'profile', profile: store.publicProfile(c.token) });
     }
 
+    if (msg.t === 'look') {
+      c.look = sanitizeLook(msg.look);
+      const lm = rooms.membership(c.token);
+      if (lm) { lm.member.look = c.look; lm.room.broadcastRoom(); }
+      return;
+    }
     if (msg.t === 'rooms') return send(ws, { t: 'rooms', rooms: rooms.listPublic() });
     if (msg.t === 'career') return send(ws, { t: 'career', career: store.careerView(c.token) });
     if (msg.t === 'careerStart') {
@@ -138,7 +146,7 @@ export function createGameServer({ port = 0, dataDir = process.env.DATA_DIR || p
       const view = store.careerView(c.token);
       if (!stage || !view.stages.find((s) => s.id === stage.id)?.unlocked) return fail(ws, 'That stage is locked', 'rejected');
       if (rooms.membership(c.token)) rooms.leave(c.token);
-      const { room, member } = rooms.create({ token: c.token, name: msg.name || c.name, ws });
+      const { room, member } = rooms.create({ token: c.token, name: msg.name || c.name, ws, look: c.look });
       member.name = String(msg.name || c.name).slice(0, 16) || 'Guest';
       room.setupCareer(stage, member);
       return;
@@ -146,7 +154,7 @@ export function createGameServer({ port = 0, dataDir = process.env.DATA_DIR || p
 
     if (msg.t === 'create') {
       if (rooms.membership(c.token)) rooms.leave(c.token);
-      const { room, member } = rooms.create({ token: c.token, name: msg.name || c.name, ws });
+      const { room, member } = rooms.create({ token: c.token, name: msg.name || c.name, ws, look: c.look });
       member.name = String(msg.name || c.name).slice(0, 16) || 'Guest';
       room.broadcastRoom();
       return;
@@ -155,7 +163,7 @@ export function createGameServer({ port = 0, dataDir = process.env.DATA_DIR || p
       const cur = rooms.membership(c.token);
       if (cur && cur.room.code === String(msg.code || '').toUpperCase().trim()) { cur.room.reconnect(cur.member, ws); return; }
       if (cur) rooms.leave(c.token);
-      const r = rooms.join(msg.code, { token: c.token, name: msg.name || c.name, ws });
+      const r = rooms.join(msg.code, { token: c.token, name: msg.name || c.name, ws, look: c.look });
       if (r.error) return fail(ws, r.error, 'join-failed');
       r.room.broadcastRoom();
       return;

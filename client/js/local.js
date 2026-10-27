@@ -19,8 +19,8 @@ export class LocalMatch {
    * @param o.onMessage (msg) => void, receives start/snap/ev/results
    * @param o.onFinish  (results) => career info | null, called once when the match ends
    */
-  constructor({ settings, names, diffs, onMessage, onFinish }) {
-    Object.assign(this, { settings, names, diffs, emit: onMessage, onFinish });
+  constructor({ settings, names, diffs, looks, onMessage, onFinish }) {
+    Object.assign(this, { settings, names, diffs, looks, emit: onMessage, onFinish });
     this.paused = false;
     this.timer = null;
   }
@@ -35,7 +35,7 @@ export class LocalMatch {
     this.lastT = performance.now();
     this.resultAt = 0;
     this.finished = false;
-    this.emit({ t: 'start', slot: 0, names: this.names, settings: this.settings, score: scoreView(this.game.match), tickRate: SERVER_TICK, local: true });
+    this.emit({ t: 'start', slot: 0, names: this.names, looks: this.looks, settings: this.settings, score: scoreView(this.game.match), tickRate: SERVER_TICK, local: true });
     this.timer = setInterval(() => this.pump(), 8);
   }
 
