@@ -25,6 +25,7 @@ const ROOMS = {
   indoor: { wet: 0.22, decay: 1.8, amb: 'hall' },
   outdoor: { wet: 0.04, decay: 0.5, amb: 'outdoor' },
   night: { wet: 0.3, decay: 2.4, amb: 'crowd' },
+  rooftop: { wet: 0.08, decay: 0.7, amb: 'city' },
 };
 
 const rr = (a, b) => a + Math.random() * (b - a);
@@ -51,6 +52,7 @@ export class Sound {
       this.master.connect(comp).connect(c.destination);
       this.sfx = c.createGain(); this.sfx.connect(this.master);
       this.amb = c.createGain(); this.amb.connect(this.master);
+      this.musicGain = c.createGain(); this.musicGain.connect(this.master);
       this.reverb = c.createConvolver();
       this.wet = c.createGain();
       this.sfx.connect(this.reverb); this.reverb.connect(this.wet); this.wet.connect(this.master);
@@ -66,6 +68,82 @@ export class Sound {
     this.master.gain.value = settings.master;
     this.sfx.gain.value = settings.sfx;
     this.amb.gain.value = settings.ambience;
+    this.musicGain.gain.value = (settings.music ?? 0.35) * 0.5;
+  }
+
+  // ------------------------------------------------------------------ music
+  // A small generative loop (chord pad, bass, plucked arpeggio and, in matches, a light beat). Everything is synthesised
+  // with Web Audio, so there are no audio files; it is quiet by default and has its own volume.
+
+  startMusic(kind = 'menu') {
+    if (!this.ctx) return;
+    if (this.musicKind === kind && this.musicTimer) return;
+    this.stopMusic();
+    this.musicKind = kind;
+    const bpm = kind === 'match' ? 104 : 78;
+    this.m = { step: 0, next: this.ctx.currentTime + 0.1, spb: 60 / bpm / 4 };
+    this.musicTimer = setInterval(() => this.musicTick(), 60);
+  }
+
+  stopMusic() {
+    clearInterval(this.musicTimer); this.musicTimer = null; this.musicKind = null;
+  }
+
+  musicTick() {
+    const c = this.ctx;
+    if (!c || c.state !== 'running') { if (this.m) this.m.next = c ? c.currentTime + 0.1 : 0; return; }
+    const m = this.m;
+    while (m.next < c.currentTime + 0.25) {
+      this.musicStep(m.step, m.next, m.spb);
+      m.step++; m.next += m.spb;
+    }
+  }
+
+  musicStep(step, t, spb) {
+    const match = this.musicKind === 'match';
+    const bar = Math.floor(step / 16) % 4, s = step % 16;
+    const roots = [57, 53, 48, 55]; // A F C G
+    const chords = [[0, 3, 7], [0, 4, 7], [0, 4, 7], [0, 4, 7]];
+    const minor = bar === 0;
+    const root = roots[bar];
+    const hz = (n) => 440 * 2 ** ((n - 69) / 12);
+    const c = this.ctx;
+    const tone = (type, f, start, dur, vol, lp = 0) => {
+      const o = c.createOscillator(); o.type = type; o.frequency.value = f;
+      const g = c.createGain();
+      g.gain.setValueAtTime(0.0001, start);
+      g.gain.linearRampToValueAtTime(vol, start + Math.min(0.04, dur * 0.3));
+      g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+      let node = o;
+      if (lp) { const f2 = c.createBiquadFilter(); f2.type = 'lowpass'; f2.frequency.value = lp; o.connect(f2); node = f2; }
+      node.connect(g).connect(this.musicGain);
+      o.start(start); o.stop(start + dur + 0.05);
+    };
+    if (s === 0) { // pad: a chord held for the bar
+      const third = minor ? 3 : 4;
+      for (const iv of [0, third, 7, 12]) {
+        tone('sawtooth', hz(root + 12 + iv) * (1 + (Math.random() - 0.5) * 0.004), t, spb * 15.5, 0.05, 900);
+      }
+      void chords;
+    }
+    if (s % 4 === 0 || (match && s === 10)) tone('triangle', hz(root - 12), t, spb * 3, 0.22, 400); // bass
+    // plucked arpeggio on the chord tones
+    const scale = [0, minor ? 3 : 4, 7, 12, 14, 12, 7, minor ? 3 : 4];
+    if (s % 2 === 0 && (match || s % 4 === 0)) tone('triangle', hz(root + 24 + scale[(s / 2) % 8]), t, spb * 2.2, 0.07, 3200);
+    if (match) {
+      if (s % 4 === 0) { // soft kick
+        const o = c.createOscillator(); o.type = 'sine';
+        o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
+        const g = c.createGain(); g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+        o.connect(g).connect(this.musicGain); o.start(t); o.stop(t + 0.2);
+      }
+      if (s % 2 === 1) { // hat
+        const src = c.createBufferSource(); src.buffer = this.noiseBuf;
+        const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7000;
+        const g = c.createGain(); g.gain.setValueAtTime(s % 4 === 3 ? 0.07 : 0.04, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+        src.connect(f).connect(g).connect(this.musicGain); src.start(t, Math.random()); src.stop(t + 0.06);
+      }
+    }
   }
 
   makeNoise() {
@@ -117,6 +195,11 @@ export class Sound {
       layer(420, 0.6, 'bandpass', 0.07, 0.11, 0.05); // wind swelling
       layer(1600, 0.4, 'highpass', 0.012);
       this.ambTimers.push(setInterval(() => this.bird(), 4500)); // birdsong now and then
+    }
+    if (kind === 'city') {
+      layer(160, 0.6, 'lowpass', 0.09, 0.08, 0.03); // distant traffic
+      layer(900, 0.5, 'bandpass', 0.02, 0.2, 0.012); // city murmur
+      layer(2400, 0.4, 'highpass', 0.008);
     }
     if (kind === 'crowd') {
       layer(700, 0.6, 'bandpass', 0.13, 0.17, 0.05); // crowd murmur with slow swells

@@ -5,6 +5,7 @@ import {
   RESULT_LABELS, nextPlayerMatch, describeOpponents, standings, finishRewards,
 } from '/shared/career2.js';
 import { ROSTER_BY_ID } from '/shared/roster.js';
+import { sceneFor } from '/shared/story.js';
 import { BOT_LABELS } from '/shared/ai.js';
 import { COURTS } from '/shared/looks.js';
 
@@ -14,6 +15,9 @@ const stars = (n) => `<span class="stars">${'★'.repeat(n)}<i>${'★'.repeat(3 
 const nameOf = (id) => (id === 'you' ? 'You' : ROSTER_BY_ID[id]?.name || id);
 const teamName = (ids) => ids.map(nameOf).join(' &amp; ');
 const formatLabel = (e) => `${e.format === 'group' ? 'Group + final' : e.size + '-draw knockout'} · ${e.mode === 'doubles' ? 'doubles' : 'singles'}`;
+
+const speaker = (who) => (who === 'narrator' ? 'Narrator' : ROSTER_BY_ID[who]?.name || who);
+const sceneHtml = (s) => (s ? `<div class="scene"><b>${esc(speaker(s.who))}</b><p>${esc(s.text)}</p></div>` : '');
 
 const TABS = [['hub', 'Hub'], ['calendar', 'Calendar'], ['training', 'Training'], ['development', 'Development']];
 
@@ -93,7 +97,7 @@ export function eventHtml(save) {
       <p class="mute" style="margin:8px 0">${ev.sets === 1 ? '1 set' : 'Best of ' + ev.sets} to ${ev.gamesPerSet} games${ev.golden ? ', golden point' : ''} · ${esc(COURTS[ev.court].name)}. Objective: win it and keep the errors down.</p>
       <button class="btn primary" data-act="eventPlay">Play match</button></div>` : '';
   return wrap(`<div class="row"><h2 style="margin:0">${esc(ev.name)}</h2><span class="tag">${esc(ev.tier)}</span><span class="grow"></span><button class="btn small ghost" data-act="eventAbandon">Withdraw</button><button class="btn small" data-act="careerTab" data-val="calendar">Calendar</button></div>
-    <p class="mute" style="margin:6px 0 12px">${esc(ev.blurb)}</p>${bracket}${nextCard}`);
+    <p class="mute" style="margin:6px 0 12px">${esc(ev.blurb)}</p>${t.round === 0 && t.rounds.length === 1 && !t.rounds[0].matches.some((m) => m.winner !== undefined) ? sceneHtml(sceneFor(ev.id, 'intro')) : ''}${bracket}${nextCard}`);
 }
 
 /** Panel shown on the results screen after an event match. */
@@ -104,6 +108,7 @@ export function eventResultHtml(info) {
     lines.push(`<div style="font-size:24px;font-weight:800;color:var(--accent)">${esc(RESULT_LABELS[r.result] || r.result)}</div>`);
     lines.push(`<p class="mute">+${r.points} ranking points · +${r.coins} coins · +${r.xp} XP${r.devPoints ? ' · +' + r.devPoints + ' development points' : ''}</p>`);
     if (info.summary) lines.push(`<p>${esc(info.summary)}</p>`);
+    lines.push(sceneHtml(sceneFor(info.eventId, r.result === 'champion' ? 'champion' : 'other')));
   } else {
     lines.push(`<p class="mute">Next: ${esc(info.next || '')}</p>`);
   }

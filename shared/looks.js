@@ -39,6 +39,11 @@ export const COURTS = {
     blurb: 'Warm daylight, palms and white walls. Slightly slower, more abrasive turf.',
     surface: { floorE: 0.72, floorFric: 0.84 },
   },
+  rooftop: {
+    id: 'rooftop', name: 'Sunset Rooftop',
+    blurb: 'A city rooftop at golden hour with string lights. Slightly quick turf.',
+    surface: { floorE: 0.73, floorFric: 0.85 },
+  },
   night: {
     id: 'night', name: 'Night Arena',
     blurb: 'Floodlit tournament arena with a full crowd. Fast turf.',

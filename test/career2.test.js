@@ -18,7 +18,7 @@ test('events are well formed: unique ids, known roster ids, partners for doubles
     for (const id of e.pool) assert.ok(ROSTER_BY_ID[id], `${e.id}: unknown ${id}`);
     if (e.mode === 'doubles') assert.ok(ROSTER_BY_ID[e.partner], `${e.id} needs a partner`);
     assert.ok([4, 8].includes(e.size));
-    assert.ok(['indoor', 'outdoor', 'night'].includes(e.court));
+    assert.ok(['indoor', 'outdoor', 'night', 'rooftop'].includes(e.court));
   }
   assert.ok(EVENTS.every((e, i) => i === 0 || e.season >= EVENTS[i - 1].season));
   assert.ok(ROSTER.length >= 12);

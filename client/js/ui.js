@@ -4,7 +4,7 @@ import { BOT_LEVELS, BOT_LABELS } from '/shared/ai.js';
 import { controlsHtml } from './controls-ui.js';
 import { ARCHETYPES, HAIR_STYLES, SKIN_TONES, RACKETS, COURTS, COURT_IDS } from '/shared/looks.js';
 
-const COURT_SHORT = { indoor: 'Indoor', outdoor: 'Outdoor', night: 'Night' };
+const COURT_SHORT = { indoor: 'Indoor', outdoor: 'Outdoor', night: 'Night', rooftop: 'Rooftop' };
 
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -394,7 +394,7 @@ export class UI {
       ${range('ambience', 0, 1, 0.05, 'Environment volume')}
       ${tog('announcer', 'Announcer (spoken score)')}
       ${range('voice', 0, 1, 0.05, 'Announcer volume')}
-      <p class="mute" style="font-size:12px;margin:2px 0">There is no music track in the game yet.</p>
+      ${range('music', 0, 1, 0.05, 'Music volume')}
 <div class="setting"><span>Camera</span><div class="seg">${['player', 'broadcast', 'tactical', 'custom'].map((c) => `<button data-act="camera" data-val="${c}" class="${settings.camera === c ? 'on' : ''}">${c}</button>`).join('')}</div></div>
       ${tog('ballTrack', 'Camera drifts toward the ball')}
       ${settings.camera === 'custom' ? range('camDist', 4, 16, 0.1, 'Custom: distance') + range('camHeight', 2.5, 16, 0.1, 'Custom: height') + range('camSmooth', 2, 12, 0.5, 'Custom: smoothing') + range('camFov', 36, 70, 1, 'Custom: field of view') : '<p class="mute" style="font-size:12px;margin:4px 0">Player: behind you · Broadcast: whole court, high · Tactical: overhead view of the positions · Custom: your own distance, height, smoothing and field of view.</p>'}

@@ -15,7 +15,7 @@ test('catalogue: four distinct archetypes, eight distinct rackets, three courts'
   assert.equal(RACKETS.length, 8);
   assert.equal(new Set(RACKETS.map((r) => r.name)).size, 8);
   assert.equal(new Set(RACKETS.map((r) => `${r.face}-${r.shape}-${r.holes}`)).size, 8, 'distinct designs');
-  assert.deepEqual(COURT_IDS.sort(), ['indoor', 'night', 'outdoor']);
+  assert.deepEqual(COURT_IDS.sort(), ['indoor', 'night', 'outdoor', 'rooftop']);
 });
 
 test('looks from clients are always clamped to valid ids', () => {

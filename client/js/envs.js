@@ -207,5 +207,57 @@ function night(ctx) {
   };
 }
 
-export const ENVIRONMENTS = { indoor, outdoor, night };
+// ================================================================= 4. Sunset rooftop
+
+function rooftop(ctx) {
+  const group = new THREE.Group(); group.name = 'env_rooftop';
+  const concrete = std(0x8b8f96, 0.95), dark = std(0x2a2f3a, 0.8), wood = std(0x8a6a48, 0.8);
+  // roof deck and low parapet all round
+  group.add(box(concrete, 40, 0.3, 46, 0, -0.17, 0));
+  for (const sz of [-1, 1]) group.add(box(concrete, 40, 1.1, 0.6, 0, 0.45, sz * 22.7));
+  for (const sx of [-1, 1]) group.add(box(concrete, 0.6, 1.1, 46, sx * 19.7, 0.45, 0));
+  // timber deck around the court
+  for (const sx of [-1, 1]) group.add(box(wood, 5, 0.06, 24, sx * 8.2, 0.03, 0));
+  // skyline: towers with lit windows on every side
+  const winTex = () => {
+    const c = document.createElement('canvas'); c.width = 64; c.height = 128;
+    const g = c.getContext('2d');
+    g.fillStyle = '#5a4a72'; g.fillRect(0, 0, 64, 128);
+    for (let y = 6; y < 124; y += 10) for (let x = 6; x < 58; x += 12) { g.fillStyle = Math.random() < 0.45 ? 'rgba(255,205,120,.95)' : 'rgba(90,76,112,.9)'; g.fillRect(x, y, 6, 6); }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+  };
+  const towerTex = [winTex(), winTex(), winTex()];
+  let seed = 11; const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  for (let i = 0; i < 46; i++) {
+    const a = (i / 46) * Math.PI * 2, r = 42 + rnd() * 34, h = 14 + rnd() * 46, w = 6 + rnd() * 9;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), new THREE.MeshBasicMaterial({ map: towerTex[i % 3] }));
+    m.position.set(Math.cos(a) * r, h / 2 - 6, Math.sin(a) * r); group.add(m);
+  }
+  // string lights across the court, and a water tank and plants for character
+  const bulb = basic(0xfff0b8);
+  for (const sz of [-1, 1]) for (let x = -18; x <= 18; x += 1.5) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), bulb); b.position.set(x, 5.6 - 0.6 * Math.cos((x / 18) * Math.PI / 2), sz * 12.5); group.add(b); }
+  for (const sx of [-1, 1]) for (let z = -14; z <= 14; z += 1.5) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 6), bulb); b.position.set(sx * 10.5, 5.4 - 0.5 * Math.cos((z / 14) * Math.PI / 2), z); group.add(b); }
+  for (const sx of [-1, 1]) for (const z of [-12.5, 12.5]) group.add(cyl(dark, 0.06, 0.06, 5.6, sx * 10.5, 2.8, z, 6));
+  group.add(cyl(dark, 1.6, 1.6, 3, -15, 1.5, -17, 14)); group.add(cyl(std(0x3a3f4b, 0.6), 1.7, 1.7, 0.3, -15, 3.1, -17, 14));
+  const plant = std(0x3f8f4a, 0.9), pot = std(0xb4572f, 0.8);
+  for (const [x, z] of [[-9.2, -11.5], [9.2, -11.5], [-9.2, 11.5], [9.2, 11.5], [-9.2, 0], [9.2, 0]]) {
+    group.add(cyl(pot, 0.45, 0.35, 0.7, x, 0.35, z));
+    for (let i = 0; i < 5; i++) { const s = new THREE.Mesh(new THREE.SphereGeometry(0.4 - i * 0.04, 8, 6), plant); s.position.set(x + Math.sin(i * 1.7) * 0.3, 1.0 + i * 0.22, z + Math.cos(i * 1.7) * 0.3); s.castShadow = true; group.add(s); }
+  }
+  // lounge benches and a few spectators
+  for (const sx of [-1, 1]) { group.add(box(wood, 0.6, 0.45, 9, sx * 8.4, 0.25, 0)); group.add(box(wood, 0.12, 0.8, 9, sx * 8.75, 0.7, 0)); }
+  ctx.makeCrowd(group, { rows: 1, sides: true, back: false, density: 0.3, xBase: 8.3, rowStep: 0.6, stepH: 0.0001, pal: [0xf2e6d0, 0x4a7ab0, 0xd9803a, 0x7fa86a, 0xc65a5a], stepMat: wood });
+  // sunset sky and sun
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(160, 24, 12), new THREE.MeshBasicMaterial({ map: gradientTex([[0, '#2a2f6b'], [0.45, '#b4507a'], [0.62, '#ff9a5c'], [0.72, '#ffd08a'], [1, '#ffe9b8']]), side: THREE.BackSide, fog: false }));
+  sky.scale.y = 0.6; group.add(sky);
+  const sun = new THREE.Mesh(new THREE.SphereGeometry(9, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffd9a0, fog: false })); sun.position.set(-95, 14, -60); group.add(sun);
+  return {
+    group,
+    light: { bg: 0x2a2f6b, fog: [0xd88a74, 55, 150], hemi: [0xffc9a8, 0x4a3a4e, 0.9], sun: { color: 0xffc58a, intensity: 1.9, pos: [-14, 9, -10] }, exposure: 1.0, envIntensity: 0.3 },
+    turf: { base: '#2b6b8f', out: { color: 0x7b7f87, rough: 0.95 } },
+    ads: { text: 'PADEL CLUB', bg: '#1d2540', fg: '#ffd08a', sub: 'SUNSET ROOFTOP' },
+  };
+}
+
+export const ENVIRONMENTS = { indoor, outdoor, night, rooftop };
 export function buildEnvironment(id, ctx) { return (ENVIRONMENTS[id] || indoor)(ctx); }

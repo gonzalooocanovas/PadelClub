@@ -38,7 +38,8 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 - ✅ Career v2 (shared/career2.js, client/js/career-ui.js): 3 seasons and 12 events (knockout draws of 4/8, group + final), per-event court and rules, real brackets (matches you do not play are simulated headlessly with the same engine and bots), 16 named characters with playing styles, world ranking vs roster points, objectives (rewards granted once, unlock two rackets), versioned save (padel.career2) that migrates the old ladder save without deleting it
 - ✅ Training: 5 drills run on the real game (serve, forehand corner, lob, volley, smash), 3 stars each, development points only for improvement
 - ✅ Development: 9 attributes, each level a small bonus (about +1%), applied only to local matches, never online
-- 🟡 Narrative is limited to scouting notes and match commentary (no story scenes). Unit-tested logic; only played through in the in-app browser with scripted input, not by a person
+- ✅ Story: a short scene before and after each of the 12 events (a character speaks; text only, no cutscenes)
+- 🟡 Unit-tested logic; only played through in the in-app browser with scripted input, not by a person
 
 ## Camera
 - ✅ Presets: player, broadcast, tactical, custom (distance, height, smoothing, field of view); optional drift toward the ball; the camera never rotates with the movement keys
@@ -46,14 +47,15 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 ## Audio
 - ✅ Rewritten engine (client/js/audio.js): a distinct sound per shot type, character changes with contact quality, glass vs mesh, footsteps and skids from the animation, per-court room reverb and ambience (hall / wind and birds / crowd and insects), random variation and rate limits, separate effects / environment / announcer volumes, optional spoken score calls (browser speech synthesis)
 - 🟡 All sounds are still synthesised (no recorded samples are shipped). Not listened to by a person in this session: only checked that nothing throws
-- ❌ Music (there is none), recorded effort/celebration sounds, crowd announcements
+- ✅ Music: a generative synthesised loop (pad, bass, arpeggio; a light beat in matches), own volume in Settings. Not listened to by a person, and it is synthesised, not composed
+- ❌ Recorded effort/celebration sounds, crowd announcements
 
 ## Multiplayer, deployment
 - ✅ 4-player authoritative rooms, reconnect, 60 Hz snapshots, looks and court synchronised (tests)
 - ✅ `render.yaml` targets Render's Frankfurt (EU) region. A service's region cannot be changed once created: recreate the service from the Blueprint.
 
 ## Tests
-- 96 automated tests: scoring, rules, physics/spin, contact model, singles, career v2 (brackets, migration, rewards), drills, input, looks/courts, 4 real WebSocket clients.
+- 97 automated tests: scoring, rules, physics/spin, contact model, singles, career v2 (brackets, migration, rewards), drills, input, looks/courts, 4 real WebSocket clients.
 - Manually checked in the in-app browser: menu, equipment screen, the three courts (menu background), a night-arena practice match.
 - NOT checked: gamepad, audio, a real 4-human session, mobile, performance on low-end GPUs.
 
@@ -66,3 +68,6 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 - ✅ Bots now attack high balls (smash, bandeja, víbora), lob less, and the levels are separated more clearly (checked by simulation: Legend beats Pro, Pro beats Club, Club beats Rookie)
 - ✅ Instant replay after each point in solo matches (slow motion, high TV camera, Space/Esc to skip, toggle in Settings). NOT in online matches: the server keeps running, so there is no safe moment to pause
 - ✅ Broadcast-style scoreboard: serving ball, set columns, games and points, animated changes, game/set/match point flags
+
+## Courts
+- ✅ Fourth court: Sunset Rooftop (skyline with lit windows, string lights, plants, city ambience, slightly quick turf). Selectable on the home screen and in lobbies. A fifth (resort) is not made

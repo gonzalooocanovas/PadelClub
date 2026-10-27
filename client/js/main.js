@@ -53,7 +53,7 @@ world.setQuality(settings.quality);
 world.setBallScale(settings.ballScale);
 onSetting((k) => {
   if (k === 'ballScale') world.setBallScale(settings.ballScale);
-  if (['master', 'sfx', 'ambience', 'voice'].includes(k)) sound.applyVolume();
+  if (['master', 'sfx', 'ambience', 'voice', 'music'].includes(k)) sound.applyVolume();
 });
 
 const val = (id) => document.getElementById(id)?.value ?? '';
@@ -65,6 +65,7 @@ const ui = new UI(document.getElementById('ui'), { sound, act });
 
 function showHome() {
   screen = 'home';
+  sound.startMusic('menu');
   stopLocal();
   if (match) { match.stop(); match = null; }
   hud = null;
@@ -101,6 +102,7 @@ function showLobby() {
 
 function showResults(msg) {
   screen = 'results';
+  sound.startMusic('menu');
   ui.results(msg, room, room?.you, rematchVotes);
 }
 
@@ -201,7 +203,7 @@ function finishEventMatch(ev, n, opp, myPts, results) {
   const seed = save.seed++;
   let k = 0;
   reportPlayerMatch(t, won, gf, ga, (a, b) => simulateMatch(a, b, ev, seed * 31 + k++));
-  const info = { event: ev.name, round: n.name, commentary: commentary(won, gf, ga, opp[0]?.note), objectives: [], next: '' };
+  const info = { event: ev.name, eventId: ev.id, round: n.name, commentary: commentary(won, gf, ga, opp[0]?.note), objectives: [], next: '' };
   let finished = null;
   if (t.status === 'done') {
     finished = completeEvent(save, ev, t.result);
@@ -267,6 +269,8 @@ input.on('padchange', () => { if (document.querySelector('#modal [data-test]')) 
 // ---------------------------------------------------------------- actions
 
 function act(name, d, el) {
+  sound.unlock(); // a click is the user gesture that lets audio (and music) start
+  if (!sound.musicKind && screen !== 'game') sound.startMusic('menu');
   switch (name) {
     case 'rename': net.send({ t: 'rename', name: val('nameInput') }); break;
     case 'create': net.send({ t: 'create', name: myName() }); break;
@@ -474,6 +478,7 @@ net.on('start', (m) => {
   });
   screen = 'game';
   sound.unlock();
+  sound.startMusic('match');
 });
 
 net.on('snap', (m) => match?.onSnap(m));

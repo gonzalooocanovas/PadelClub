@@ -6,6 +6,7 @@ const DEFAULTS = {
   sfx: 0.9,
   ambience: 0.5,
   voice: 0.8,
+  music: 0.35,
   announcer: false, // spoken score calls (uses the browser's speech synthesis)
   camera: 'player', // player | broadcast | tactical | custom
   camDist: 7.2,

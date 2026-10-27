@@ -229,3 +229,7 @@ kbd { background: #0d141e; border: 1px solid var(--line); border-bottom-width: 2
 .opt:disabled { opacity: .4; cursor: not-allowed; }
 
 .hud.replaying .bottomleft, .hud.replaying .feedback, .hud.replaying .chatfeed { opacity: 0; }
+
+.scene { border-left: 3px solid var(--accent); background: var(--panel-2); border-radius: 0 6px 6px 0; padding: 8px 12px; margin: 10px 0; }
+.scene b { color: var(--accent); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
+.scene p { margin: 4px 0 0; font-style: italic; }
