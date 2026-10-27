@@ -191,12 +191,14 @@ export class PadelGame {
         if (this.phase !== 'rally') break;
         this.onBallEvent(e);
       }
-    } else if (this.phase === 'point') {
+    } else if (this.phase === 'point' || this.phase === 'ended') {
       const ev = [];
-      stepBall(this.ball, dt, ev); // let the ball coast; events no longer matter
+      stepBall(this.ball, dt, ev); // let the ball coast (also after the last point of the match); events no longer matter
       for (const e of ev) if (e.type === 'floor' || e.type === 'wall') this.events.push({ e: 'ball', k: e.type, x: e.x, y: e.y ?? 0, z: e.z, s: e.speed });
-      this.pauseT -= dt;
-      if (this.pauseT <= 0) this.startPoint();
+      if (this.phase === 'point') {
+        this.pauseT -= dt;
+        if (this.pauseT <= 0) this.startPoint();
+      } else if (this.ball.y <= 0.04 && Math.hypot(this.ball.vx, this.ball.vz) < 0.2) { this.ball.vx = this.ball.vz = 0; }
     }
   }
 

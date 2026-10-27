@@ -53,9 +53,12 @@ export class Sound {
       this.sfx = c.createGain(); this.sfx.connect(this.master);
       this.amb = c.createGain(); this.amb.connect(this.master);
       this.musicGain = c.createGain(); this.musicGain.connect(this.master);
+      this.musicSend = c.createGain(); this.musicSend.gain.value = 0.55; // music goes through the room reverb as well: softer, less synthetic
+      this.musicGain.connect(this.musicSend);
       this.reverb = c.createConvolver();
       this.wet = c.createGain();
       this.sfx.connect(this.reverb); this.reverb.connect(this.wet); this.wet.connect(this.master);
+      this.musicSend.connect(this.reverb);
       this.noiseBuf = this.makeNoise();
       this.setCourt(this.court);
     }
@@ -68,7 +71,7 @@ export class Sound {
     this.master.gain.value = settings.master;
     this.sfx.gain.value = settings.sfx;
     this.amb.gain.value = settings.ambience;
-    this.musicGain.gain.value = (settings.music ?? 0.35) * 0.5;
+    this.musicGain.gain.value = (settings.music ?? 0.35) * 0.6;
   }
 
   // ------------------------------------------------------------------ music
@@ -80,7 +83,7 @@ export class Sound {
     if (this.musicKind === kind && this.musicTimer) return;
     this.stopMusic();
     this.musicKind = kind;
-    const bpm = kind === 'match' ? 104 : 78;
+    const bpm = kind === 'match' ? 92 : 72;
     this.m = { step: 0, next: this.ctx.currentTime + 0.1, spb: 60 / bpm / 4 };
     this.musicTimer = setInterval(() => this.musicTick(), 60);
   }
@@ -101,47 +104,66 @@ export class Sound {
 
   musicStep(step, t, spb) {
     const match = this.musicKind === 'match';
-    const bar = Math.floor(step / 16) % 4, s = step % 16;
-    const roots = [57, 53, 48, 55]; // A F C G
-    const chords = [[0, 3, 7], [0, 4, 7], [0, 4, 7], [0, 4, 7]];
-    const minor = bar === 0;
-    const root = roots[bar];
-    const hz = (n) => 440 * 2 ** ((n - 69) / 12);
     const c = this.ctx;
-    const tone = (type, f, start, dur, vol, lp = 0) => {
-      const o = c.createOscillator(); o.type = type; o.frequency.value = f;
-      const g = c.createGain();
+    const bar = Math.floor(step / 16) % 8, s = step % 16;
+    // I – vi – ii – V (Cmaj7, Am7, Dm7, G7), repeated: smooth voice leading, nothing harsh
+    const chords = [[48, 52, 55, 59], [45, 52, 55, 60], [50, 53, 57, 60], [43, 53, 55, 59]];
+    const ch = chords[bar % 4];
+    const hz = (n) => 440 * 2 ** ((n - 69) / 12);
+    const swing = s % 2 === 1 ? spb * 0.18 : 0; // a little lazy swing on the off-beats
+    const env = (g, start, atk, dur, vol) => {
       g.gain.setValueAtTime(0.0001, start);
-      g.gain.linearRampToValueAtTime(vol, start + Math.min(0.04, dur * 0.3));
+      g.gain.linearRampToValueAtTime(vol, start + atk);
       g.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-      let node = o;
-      if (lp) { const f2 = c.createBiquadFilter(); f2.type = 'lowpass'; f2.frequency.value = lp; o.connect(f2); node = f2; }
-      node.connect(g).connect(this.musicGain);
-      o.start(start); o.stop(start + dur + 0.05);
     };
-    if (s === 0) { // pad: a chord held for the bar
-      const third = minor ? 3 : 4;
-      for (const iv of [0, third, 7, 12]) {
-        tone('sawtooth', hz(root + 12 + iv) * (1 + (Math.random() - 0.5) * 0.004), t, spb * 15.5, 0.05, 900);
+    const voice = (type, f, start, atk, dur, vol, lp) => {
+      const o = c.createOscillator(); o.type = type; o.frequency.value = f;
+      const g = c.createGain(); env(g, start, atk, dur, vol);
+      let n = o;
+      if (lp) { const fl = c.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = lp; fl.Q.value = 0.3; o.connect(fl); n = fl; }
+      n.connect(g).connect(this.musicGain);
+      o.start(start); o.stop(start + dur + 0.1);
+    };
+    if (s === 0) { // warm pad: slow attack, long release, two slightly detuned sines per note
+      for (const n of ch) {
+        voice('sine', hz(n + 12) * 0.997, t, 0.9, spb * 17, 0.045, 1400);
+        voice('triangle', hz(n + 12) * 1.003, t, 0.9, spb * 17, 0.02, 900);
       }
-      void chords;
     }
-    if (s % 4 === 0 || (match && s === 10)) tone('triangle', hz(root - 12), t, spb * 3, 0.22, 400); // bass
-    // plucked arpeggio on the chord tones
-    const scale = [0, minor ? 3 : 4, 7, 12, 14, 12, 7, minor ? 3 : 4];
-    if (s % 2 === 0 && (match || s % 4 === 0)) tone('triangle', hz(root + 24 + scale[(s / 2) % 8]), t, spb * 2.2, 0.07, 3200);
+    // bass: root on 1 and the fifth on 3
+    if (s === 0 || s === 8 || (match && s === 11)) voice('sine', hz(ch[0] - 12 + (s === 8 ? 7 : 0)), t + swing, 0.01, spb * 3.2, 0.2, 300);
+    // electric-piano style melody (C major pentatonic), sparse, with rests, changing every two bars
+    const penta = [60, 62, 64, 67, 69, 72, 74, 76];
+    const phrases = [
+      [-1, -1, 4, -1, -1, 3, -1, 2, -1, -1, 3, -1, 1, -1, -1, -1],
+      [2, -1, -1, 3, -1, -1, 4, -1, 5, -1, -1, 4, -1, -1, 2, -1],
+      [-1, 0, -1, 2, -1, -1, 3, -1, -1, 4, -1, 3, -1, -1, -1, -1],
+      [4, -1, -1, 5, -1, 4, -1, -1, 3, -1, 2, -1, -1, -1, 1, -1],
+    ];
+    const ph = phrases[Math.floor(bar / 2) % 4][s];
+    if (ph >= 0 && (match || (bar % 2 === 0))) {
+      const n = penta[ph];
+      voice('sine', hz(n), t + swing, 0.005, spb * 3, 0.07, 2600);
+      voice('sine', hz(n) * 2, t + swing, 0.005, spb * 1.2, 0.02, 4000); // bell-like upper partial that fades fast
+    }
     if (match) {
-      if (s % 4 === 0) { // soft kick
+      if (s % 8 === 0) { // soft kick
         const o = c.createOscillator(); o.type = 'sine';
-        o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.12);
-        const g = c.createGain(); g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
-        o.connect(g).connect(this.musicGain); o.start(t); o.stop(t + 0.2);
+        o.frequency.setValueAtTime(105, t); o.frequency.exponentialRampToValueAtTime(44, t + 0.1);
+        const g = c.createGain(); g.gain.setValueAtTime(0.32, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+        o.connect(g).connect(this.musicGain); o.start(t); o.stop(t + 0.22);
       }
-      if (s % 2 === 1) { // hat
+      if (s === 4 || s === 12) { // rim-like snap instead of a snare
         const src = c.createBufferSource(); src.buffer = this.noiseBuf;
-        const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7000;
-        const g = c.createGain(); g.gain.setValueAtTime(s % 4 === 3 ? 0.07 : 0.04, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
-        src.connect(f).connect(g).connect(this.musicGain); src.start(t, Math.random()); src.stop(t + 0.06);
+        const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1800; f.Q.value = 1.4;
+        const g = c.createGain(); g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+        src.connect(f).connect(g).connect(this.musicGain); src.start(t, Math.random()); src.stop(t + 0.08);
+      }
+      if (s % 2 === 0) { // quiet shaker
+        const src = c.createBufferSource(); src.buffer = this.noiseBuf;
+        const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 6500;
+        const g = c.createGain(); g.gain.setValueAtTime(s % 4 === 0 ? 0.028 : 0.016, t + swing); g.gain.exponentialRampToValueAtTime(0.001, t + swing + 0.05);
+        src.connect(f).connect(g).connect(this.musicGain); src.start(t + swing, Math.random()); src.stop(t + swing + 0.06);
       }
     }
   }

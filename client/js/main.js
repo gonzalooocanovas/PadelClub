@@ -60,6 +60,18 @@ const val = (id) => document.getElementById(id)?.value ?? '';
 const myName = () => (val('nameInput').trim() || net.name || 'Guest').slice(0, 16);
 
 const ui = new UI(document.getElementById('ui'), { sound, act });
+ui.getMouseAim = () => input.settings.mouseAim;
+
+function setMouseAim(on, fromPause) {
+  input.settings.mouseAim = on;
+  input.settings.scheme = 'custom';
+  input.save();
+  toast(on ? 'Mouse aim on: move the cursor to aim, click to hit' : 'Mouse aim off: hold a direction as you hit');
+  if (fromPause) ui.pauseMenu(!!local, on); else if (document.querySelector('#modal h2')?.textContent === 'Settings') ui.settingsModal(() => {});
+}
+document.addEventListener('keydown', (e) => {
+  if ((e.key === 'm' || e.key === 'M') && screen === 'game' && !ui.modal && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || '')) setMouseAim(!input.settings.mouseAim);
+});
 
 // ---------------------------------------------------------------- screens
 
@@ -300,6 +312,7 @@ function act(name, d, el) {
     }
     case 'previewMode': if (preview) { if (d.val === 'racket') preview.setRacket(myLook.racket); else preview.setCharacter(myLook, previewTeam); } break;
     case 'previewTeam': previewTeam ^= 1; if (preview && preview.mode === 'character') preview.setCharacter(myLook, previewTeam); break;
+    case 'mouseAim': setMouseAim(d.val === '1', d.pause === '1'); break;
     case 'camera': setSetting('camera', d.val); ui.settingsModal(() => {}); break;
     case 'controlsSettings': openControls(); break;
     case 'scheme': applyScheme(input.settings, d.val); input.save(); openControls(); break;
@@ -473,7 +486,7 @@ net.on('start', (m) => {
     net: m.local ? localProxy : net, world, hud, sound, start: m, input,
     onReplay: (on) => local?.setPaused(on),
     onPause: () => {
-      if (ui.modal) { ui.closeModal(); match?.setPaused(false); local?.setPaused(false); } else { ui.pauseMenu(); match?.setPaused(true); local?.setPaused(true); }
+      if (ui.modal) { ui.closeModal(); match?.setPaused(false); local?.setPaused(false); } else { ui.pauseMenu(!!local, input.settings.mouseAim); match?.setPaused(true); local?.setPaused(true); }
     },
   });
   screen = 'game';

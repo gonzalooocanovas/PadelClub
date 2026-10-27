@@ -71,3 +71,11 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 
 ## Courts
 - ✅ Fourth court: Sunset Rooftop (skyline with lit windows, string lights, plants, city ambience, slightly quick turf). Selectable on the home screen and in lobbies. A fifth (resort) is not made
+
+## Fixes after play-testing
+- ✅ Mouse aim is back as a visible option: Settings, the pause menu, or the M key (target ring follows the cursor, left click hits, right click = globo)
+- ✅ Rally length shown after every point (chip under the scoreboard and in the banner)
+- ✅ Pausing a solo match now freezes everything (logic and animation). Online matches cannot be paused: the pause menu says so
+- ✅ After the last point the ball keeps coasting instead of freezing mid-air
+- ✅ Doors are wider (2 m) and marked: glowing frames, lit lintel and a floor mat inside the court
+- ✅ Music rewritten (warm pad, soft electric-piano melody, swing, reverb, softer beat). Still synthesised and not judged by a person

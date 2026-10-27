@@ -301,6 +301,7 @@ export class MatchClient {
     for (const e of evs) {
       switch (e.e) {
         case 'serve': {
+          this.hud.rally(0);
           this.serverSlot = e.slot;
           this.hud.setScore(e.score, this.names);
           if (e.score.matchPoint) this.sound.play('matchpoint');
@@ -341,6 +342,7 @@ export class MatchClient {
         case 'point': {
           this.hud.setScore(e.score, this.names);
           this.hud.setStats(e.st, e.lr);
+          this.hud.rally(e.rally);
           if (e.winner === this.team) this.world.cheerCrowd();
           if (this.local && !e.marks.some((m) => m.type === 'match')) setTimeout(() => this.startReplay(), 1300);
           setTimeout(() => {
@@ -352,11 +354,11 @@ export class MatchClient {
           const why = e.reason === 'bounce' && e.rally === 1 ? 'Ace' : REASONS[e.reason] || '';
           if (top) {
             const word = { match: 'Game, set & match', set: 'Set', game: 'Game' }[top.type];
-            this.hud.banner(word, `${team} · ${why}`, 2200);
+            this.hud.banner(word, `${team} · ${why} · rally of ${e.rally}`, 2400);
             this.sound.play(top.type === 'match' ? 'match' : top.type === 'set' ? 'set' : 'game');
             this.sound.announce(top.type === 'match' ? 'Game, set and match' : top.type === 'set' ? 'Set' : 'Game');
           } else {
-            this.hud.banner(why, `${team} wins the point`, 1800);
+            this.hud.banner(why, `${e.winner === this.team ? 'Your team wins' : 'Opponents win'} the point · rally of ${e.rally} ${e.rally === 1 ? 'shot' : 'shots'}`, 2000);
             this.sound.play(e.winner === this.team ? 'point' : 'lose');
           }
           break;
@@ -403,6 +405,7 @@ export class MatchClient {
     if (this.stopped) return;
     dt = Math.min(dt, 0.1);
     if (this.replay) { this.playReplay(dt); return; }
+    if (this.paused && this.local) return; // solo match paused: everything stands still
     this.updateAim(dt);
 
     // fixed-step local input + prediction

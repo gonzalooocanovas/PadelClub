@@ -230,6 +230,12 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
         fence(dz1 - dz0, 3 - dh, x, dh + (3 - dh) / 2, sz * (dz0 + dz1) / 2, Math.PI / 2);
         rail(dz1 - dz0, x, dh, sz * (dz0 + dz1) / 2, Math.PI / 2);
         post(x, sz * dz0, 4); post(x, sz * dz1, 4);
+        // make the door impossible to miss: glowing frame, a lit lintel bar and a floor mat inside the court
+        const glow = new THREE.MeshBasicMaterial({ color: ACCENT });
+        for (const zz of [dz0, dz1]) { const f = new THREE.Mesh(new THREE.BoxGeometry(0.1, dh, 0.1), glow); f.position.set(x, dh / 2, sz * zz); this.pitGroup.add(f); }
+        const lin = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, dz1 - dz0 + 0.1), glow); lin.position.set(x, dh, sz * (dz0 + dz1) / 2); this.pitGroup.add(lin);
+        const mat = new THREE.Mesh(new THREE.PlaneGeometry(1.1, dz1 - dz0), new THREE.MeshBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.22, depthWrite: false }));
+        mat.rotation.x = -Math.PI / 2; mat.position.set(sx * (COURT.HALF_W - 0.55), 0.03, sz * (dz0 + dz1) / 2); this.pitGroup.add(mat);
       }
       fence(12, 1, x, 3.5, 0, Math.PI / 2);
       rail(20, x, 4, 0, Math.PI / 2); rail(20, x, 3, 0, Math.PI / 2);

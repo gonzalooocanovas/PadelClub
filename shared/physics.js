@@ -52,7 +52,7 @@ export function stepPlayer(p, inp, dt, limit, mul = 1) {
  */
 function clampWithDoors(p, prevX) {
   const az = Math.abs(p.z);
-  const door = az >= DOOR.z0 + 0.3 && az <= DOOR.z1 - 0.3;
+  const door = az >= DOOR.z0 + 0.15 && az <= DOOR.z1 - 0.15;
   const outer = HALF_W + PIT.w - 0.4;
   if (Math.abs(prevX) > HALF_W + 0.05) { // already outside: stay in the strip, or come back in through the door
     const s = Math.sign(p.x) || Math.sign(prevX) || 1;

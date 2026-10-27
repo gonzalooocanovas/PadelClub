@@ -10,7 +10,7 @@ export const COURT = {
   BALL_R: 0.0335,
   // access doors in the side walls near the net (doubles): the ball may leave through them after bouncing, and the receiver may follow it.
   // Outside each side wall runs a fenced strip along the whole court, so a ball can be sent back around the net post and in through the other door.
-  DOOR: { z0: 1.4, z1: 3.0, h: 2.0 },
+  DOOR: { z0: 1.2, z1: 3.2, h: 2.0 },
   PIT: { z1: 9.2, w: 1.8 },
 };
 
