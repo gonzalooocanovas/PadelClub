@@ -79,3 +79,4 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 - ✅ After the last point the ball keeps coasting instead of freezing mid-air
 - ✅ Doors are wider (2 m) and marked: glowing frames, lit lintel and a floor mat inside the court
 - ✅ Music rewritten (warm pad, soft electric-piano melody, swing, reverb, softer beat). Still synthesised and not judged by a person
+- ✅ Match history: every finished match (practice, career, online) is saved in this browser (last 100) and shown under History on the home screen with wins, win rate, streak, best rally and aces. It lives in the browser's storage, so it is per device and is lost if site data is cleared; it is not synced to the server

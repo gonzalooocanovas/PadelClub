@@ -75,6 +75,7 @@ export class UI {
           </div>
           <div class="row">
             <button class="btn ghost grow" data-act="profile">Profile</button>
+            <button class="btn ghost grow" data-act="history">History</button>
             <button class="btn ghost grow" data-act="rooms">Rooms</button>
             <button class="btn ghost grow" data-act="controls">How to play</button>
             <button class="btn ghost grow" data-act="settings">Settings</button>
@@ -314,6 +315,16 @@ export class UI {
       ? '<p class="mute">No public rooms right now. Create one and set <b>Room visibility → Public</b> in the lobby.</p>'
       : `<table class="table"><tr><th>Host</th><th>Mode</th><th>Bots</th><th>Players</th><th></th></tr>${list.map((r) => `<tr><td>${esc(r.host)}</td><td>${r.mode === 'singles' ? '1 vs 1' : '2 vs 2'}</td><td>${BOT_LABELS[r.difficulty] || r.difficulty}</td><td>${r.players}/${r.max}</td><td><button class="btn small primary" data-act="joinRoom" data-code="${esc(r.code)}">Join</button></td></tr>`).join('')}</table>`;
     this.openModal(`<h2>Public rooms</h2>${rows}<div class="row" style="margin-top:12px"><button class="btn small" data-act="rooms">Refresh</button></div>`);
+  }
+
+  historyModal(list, s) {
+    const when = (t) => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) + ' ' + new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    const kind = { practice: 'Practice', career: 'Career', online: 'Online' };
+    const rows = list.slice(0, 40).map((e) => `<tr><td>${esc(when(e.at))}</td><td>${kind[e.kind] || ''} · ${e.mode === 'singles' ? '1v1' : '2v2'}</td><td>${e.mates?.length ? esc(e.mates.join(' & ')) + ' vs ' : 'vs '}${esc((e.opponents || []).join(' & '))}</td><td style="color:${e.won ? 'var(--accent)' : 'var(--bad)'};font-weight:800">${e.won ? 'W' : 'L'} ${e.sets.map((x) => x.join('–')).join(' ')}</td><td>${e.longestRally}</td></tr>`).join('');
+    this.openModal(`<h2>Match history</h2>
+      <div class="statrow"><div><span class="label">Matches</span><b>${s.matches}</b></div><div><span class="label">Wins</span><b>${s.wins}</b></div><div><span class="label">Win rate</span><b>${s.winRate}%</b></div><div><span class="label">Streak</span><b>${s.streak}</b></div><div><span class="label">Best rally</span><b>${s.longestRally}</b></div><div><span class="label">Aces</span><b>${s.aces}</b></div></div>
+      ${list.length ? `<table class="table" style="margin-top:12px"><tr><th>When</th><th>Mode</th><th>Players</th><th>Result</th><th>Rally</th></tr>${rows}</table>${list.length > 40 ? '<p class="mute">Showing the latest 40.</p>' : ''}<div class="row" style="margin-top:10px"><button class="btn small ghost" data-act="historyClear">Clear history</button></div>` : '<p class="mute" style="margin-top:12px">No matches yet. Every finished match (practice, career or online) is saved here, in this browser.</p>'}`);
+    this.modal.querySelector('.modal').classList.add('wide');
   }
 
   openModal(html) {

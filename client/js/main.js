@@ -16,6 +16,7 @@ import {
 import { ROSTER_BY_ID } from '/shared/roster.js';
 import { hubHtml, eventHtml, eventResultHtml, drillResultHtml } from './career-ui.js';
 import { DrillController } from './drills.js';
+import { entryFrom, addEntry, loadHistory, saveHistory, summarize } from '/shared/history.js';
 
 const net = new Net();
 const input = new InputManager(localStorage);
@@ -403,6 +404,8 @@ function act(name, d, el) {
       ui.profileModal(merged, net.name);
       break;
     }
+    case 'history': { const list = loadHistory(localStorage); ui.historyModal(list, summarize(list)); break; }
+    case 'historyClear': { saveHistory(localStorage, []); ui.historyModal([], summarize([])); toast('History cleared'); break; }
     case 'controls': ui.controls(); break;
     case 'settings': ui.settingsModal(() => {}); break;
     case 'closeModal': ui.closeModal(); match?.setPaused(false); local?.setPaused(false); break;
@@ -501,8 +504,17 @@ net.on('rematchVotes', (m) => {
   rematchVotes = m.ready;
   if (screen === 'results' && lastResults) showResults(lastResults);
 });
+function recordMatch(m) {
+  try {
+    const slot = local ? 0 : Math.max(0, room?.slots?.findIndex((s) => s && s.id === room.you) ?? 0);
+    const entry = entryFrom(m.results, { slot, names: m.names, mode: room?.settings?.mode || 'doubles', court: room?.settings?.court || 'indoor', kind: m.career ? 'career' : local ? 'practice' : 'online' });
+    saveHistory(localStorage, addEntry(loadHistory(localStorage), entry));
+  } catch { /* history is a convenience: never break the results screen */ }
+}
+
 net.on('results', (m) => {
   lastResults = m;
+  recordMatch(m);
   if (match) { match.stop(); }
   setTimeout(() => { if (screen !== 'lobby') showResults(m); }, 0);
 });

@@ -26,6 +26,8 @@ Requires Node 20+. No build step: the client is plain ES modules served by the s
 
 **Off-court play (2v2)**: each side wall has two access doors near the net. If the ball bounces and then leaves through a door, chase it outside and return it along the strip and in through the other door.
 
+**Match history**: every finished match is remembered in your browser (History button on the home screen).
+
 **Bot levels**: Rookie, Club, Pro, Legend (pick them on the home screen, in the lobby, or via the career stage). Higher levels react faster, cover more ground, aim for open space and the lines, and mix globos, dejadas, slices and spin serves.
 
 **Public rooms**: the host can set *Room visibility → Public* in the lobby; open lobbies appear under *Rooms* on the home screen for one-click joining.
