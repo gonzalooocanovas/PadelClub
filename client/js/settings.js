@@ -21,6 +21,7 @@ const DEFAULTS = {
   hints: true,
   highContrast: false,
   invertAim: false,
+  scannedModels: true, // use the scanned 3D player models (rigid: they lean and turn but do not swing); off = the jointed, animated characters
 };
 
 let cur = { ...DEFAULTS };

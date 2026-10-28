@@ -157,3 +157,7 @@ Classes: IMPLEMENTED / AUTO-TESTED / MANUALLY VERIFIED (a person, or me in the r
 | Bot aces / double faults | no | | | essentially 0% |
 | Animation re-timed to the authoritative contact | no | | | |
 | Mobile / low-end GPU / physical gamepad / 4 humans | no | | | not tested |
+
+## Scanned player models
+- Implemented: `client/models/player_a.glb` (male, lunge) and `player_b.glb` (female, ready stance), simplified from the owner's 500k/830k-triangle files to about 21k/33k triangles and 0.75/1 MB with gltf-transform (dev-only tool, not a project dependency). Archetypes 0 and 2 use model a, 1 and 3 use model b. Team shown by a coloured ring on the floor (both models wear navy). Setting "Scanned player models" turns them off (back to the jointed characters).
+- Limits: rigid meshes with no skeleton, so no racket swing, no leg cycle: they lean, twist, bob and turn only. The model's own racket does not move to the ball. Hair/skin options and the equipment preview still show the old characters. Checked in one real-time practice screenshot only.

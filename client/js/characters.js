@@ -134,6 +134,17 @@ export function buildRacket(design = RACKETS[0]) {
 // ===================================================================== characters
 
 const blob = { geo: null, mat: null };
+/** The shared soft-shadow geometry and material (created on first use). */
+export function blobShadow() {
+  if (!blob.geo) {
+    blob.geo = new THREE.CircleGeometry(0.5, 20);
+    blob.mat = new THREE.MeshBasicMaterial({
+      map: canvasTex(64, 64, (g, w, h) => { const gr = g.createRadialGradient(w / 2, h / 2, 2, w / 2, h / 2, w / 2); gr.addColorStop(0, 'rgba(0,0,0,.55)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, w, h); }),
+      transparent: true, depthWrite: false,
+    });
+  }
+  return blob;
+}
 
 function shirtTexture(team, arch, kit) {
   const T = TEAM[team];
@@ -324,6 +335,7 @@ export function buildCharacter(look, team) {
 
 /** Free all GPU resources of a character (used when looks change). */
 export function disposeCharacter(rig) {
+  if (rig.statue) { rig.markMat.dispose(); rig.root.traverse((o) => { if (o.material && o.material !== blob.mat && o.material !== rig.markMat) o.material.dispose(); }); return; } // geometry and textures belong to the shared loaded model
   rig.root.traverse((o) => {
     if (o.geometry && o.geometry !== blob.geo) o.geometry.dispose();
     if (o.material && o.material !== blob.mat) { (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.map?.dispose(); m.alphaMap?.dispose(); m.dispose(); }); }

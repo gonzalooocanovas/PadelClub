@@ -7,7 +7,9 @@ import { UnrealBloomPass } from '/vendor/three/examples/jsm/postprocessing/Unrea
 import { OutputPass } from '/vendor/three/examples/jsm/postprocessing/OutputPass.js';
 import { COURT } from '/shared/constants.js';
 import { DEFAULT_LOOKS } from '/shared/looks.js';
-import { buildCharacter, disposeCharacter } from './characters.js';
+import { buildCharacter, disposeCharacter, blobShadow } from './characters.js';
+import { loadStatues, statueReady, statueKind, buildStatue, statueFollow } from './statue.js';
+import { settings, onSetting } from './settings.js';
 import { buildEnvironment } from './envs.js';
 import { netHeight } from '/shared/physics.js';
 
@@ -115,6 +117,8 @@ export class World {
     this.buildFx();
     this.buildEnv();
     this.setLooks(DEFAULT_LOOKS);
+    loadStatues().then((ok) => { if (ok) this.setLooks(this.lastLooks); });
+    onSetting((k) => { if (k === 'scannedModels') this.setLooks(this.lastLooks); });
     this.setCourt('indoor');
     this.setQuality('medium');
     this.resize();
@@ -408,16 +412,17 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
    * Poses are driven by a small parameter vector (see READY) so every shot is a set of keyframes.
    */
   makePlayer(team, look) {
-    const rig = buildCharacter(look, team);
+    const rig = settings.scannedModels && statueReady(statueKind(look)) ? buildStatue(look, team, blobShadow()) : buildCharacter(look, team);
     rig.cur = READY.slice();
     return rig;
   }
 
   /** (Re)build the four athletes from their looks. Unchanged looks keep their rig. */
   setLooks(looks) {
+    this.lastLooks = looks;
     for (let i = 0; i < 4; i++) {
       const look = looks?.[i] || DEFAULT_LOOKS[i];
-      const key = JSON.stringify(look);
+      const key = JSON.stringify(look) + (settings.scannedModels && statueReady(statueKind(look)) ? '|s' : '');
       if (this.players[i] && this.players[i].lookKey === key) continue;
       const old = this.players[i];
       if (old) { this.scene.remove(old.root); disposeCharacter(old); }
@@ -625,7 +630,7 @@ if (swinging) {
     pl.armR.elbow.rotation.set(-(P[6] + Math.sin(ph + Math.PI) * 0.15 * run * calm), 0, 0);
     pl.armL.sh.rotation.set(P[8] + counter, P[7], 0.12);
     pl.armL.elbow.rotation.set(-(P[9] + 0.55 * run * calm), 0, 0); // running arms bend
-    this.orientRacket(pl);
+    if (pl.statue) statueFollow(pl); else this.orientRacket(pl);
 
     // head tracks the ball
     const total = pl.yaw + P[0] + P[1];
