@@ -170,3 +170,6 @@ Classes: IMPLEMENTED / AUTO-TESTED / MANUALLY VERIFIED (a person, or me in the r
 - Not done: toes, fingers, twist bones, cloth; joint positions are estimates; run cycle and serve not inspected as stills; nobody has judged it in real time.
 
 - Neutral pose is now STRAIGHT (latest): both models are re-posed to stand upright with straight legs, feet flat and arms hanging (racket hanging from the right hand); the ready stance, swings and runs are rotations away from that. Model b keeps the left-hand cut (triangles joining her left hand to the rest are dropped, material double-sided), which leaves thin finger strands in some poses (smash). Checked as stills: neutral and ready for both, forehand, smash.
+
+## Characters: scanned models set aside (latest)
+- The owner judged the skinned scanned models to look like deformed monsters and asked to use them only as REFERENCE. The scanned path (client/js/skin.js, statue.js, client/models) stays in the repo but is OFF by default (Settings: Scanned player models, experimental). The default characters are the procedural ones again, reworked with the scans as reference: smooth muscle-shaped limbs (thighs, calves, biceps, forearms), deltoids and trapezius, a thicker neck, streamlined sneakers instead of boxes, snugger sleeves, a slightly bigger head and deeper navy/red kits. Looked at in stills and one match frame only.

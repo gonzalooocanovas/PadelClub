@@ -439,7 +439,7 @@ export class UI {
       <div class="setting"><span>Aim with the mouse (click to hit)</span><div class="seg"><button data-act="mouseAim" data-val="1" class="${mouseAimOn ? 'on' : ''}">On</button><button data-act="mouseAim" data-val="0" class="${mouseAimOn ? '' : 'on'}">Off</button></div></div>
       ${tog('timing', 'Timing indicator')}
       ${tog('replays', 'Instant replays after points (solo matches)')}
-      ${tog('scannedModels', 'Scanned player models (rigid, no swing animation)')}
+      ${tog('scannedModels', 'Scanned player models (experimental, off by default)')}
       ${tog('trail', 'Ball trail')}
       ${tog('highContrast', 'High contrast UI')}
       <div class="setting"><span>Controls (keyboard, mouse, gamepad)</span><button class="btn small primary" data-act="controlsSettings">Configure…</button></div>

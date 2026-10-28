@@ -6,8 +6,8 @@ import * as THREE from 'three';
 import { ARCHETYPES, SKIN_TONES, HAIR_COLORS, RACKETS } from '/shared/looks.js';
 
 const TEAM = [
-  { main: 0x2f63d6, dark: 0x1a3d94, light: 0x86aaf0, trim: 0xffffff }, // team A: blue
-  { main: 0xd6403a, dark: 0x8a2420, light: 0xf0948f, trim: 0x15181d }, // team B: red
+  { main: 0x233f86, dark: 0x16285a, light: 0x7d9be0, trim: 0xffffff }, // team A: blue
+  { main: 0xb4312d, dark: 0x6f1d1a, light: 0xf0948f, trim: 0x15181d }, // team B: red
 ];
 
 function canvasTex(w, h, draw, { repeat, srgb = true } = {}) {
@@ -203,6 +203,18 @@ export function buildCharacter(look, team) {
   const taper = (rt, rb, h, mat, seg = 14) => cast(new THREE.Mesh(new THREE.CylinderGeometry(rt, rb, h, seg), mat));
   const ball = (r, mat) => cast(new THREE.Mesh(new THREE.SphereGeometry(r, 14, 10), mat));
   const lathe = (pts, mat, seg = 24) => cast(new THREE.Mesh(new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), seg), mat));
+  // A limb segment hanging down from the origin: radius r0 at the top, r1 at the bottom, with a muscle belly (bulge, as a fraction
+  // of the radius) centred at `at` (0..1 down the segment). Smooth like skin, unlike a plain cone.
+  const muscle = (r0, r1, len, at, bulge, mat, seg = 20, depth = 1) => {
+    const pts = [];
+    for (let i = 0; i <= 14; i++) {
+      const t = i / 14, base = r0 + (r1 - r0) * t, k = Math.exp(-(((t - at) / 0.28) ** 2));
+      pts.push([base * (1 + bulge * k), -t * len]);
+    }
+    const g = new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), seg);
+    g.scale(1, 1, depth);
+    return cast(new THREE.Mesh(g, mat));
+  };
 
   const root = new THREE.Group();
   root.name = `athlete_${A.key}_team${team}`;
@@ -223,23 +235,21 @@ export function buildCharacter(look, team) {
   // legs: tapered thigh and calf, shorts hem (not on skirts), sock, shoe with heel tab, toe cap and laces
   const leg = (sx) => {
     const thigh = new THREE.Group(); thigh.position.set(sx * 0.095 * (0.9 + 0.1 * B), -0.03, 0); hips.add(thigh);
-    const th = taper(0.088 * Lm, 0.062 * Lm, 0.44, skin); th.position.y = -0.21; thigh.add(th);
-    const quad = ball(0.07 * Lm, skin); quad.scale.set(1, 2.2, 1.05); quad.position.set(0, -0.15, 0.012); thigh.add(quad);
+    const th = muscle(0.1 * Lm, 0.064 * Lm, 0.44, 0.3, 0.2, skin, 22, 1.08); thigh.add(th);
     if (!female) {
       const hem = taper(0.1 * Lm, 0.098 * Lm, 0.26, shorts, 16); hem.position.y = -0.13; thigh.add(hem);
       const hemTrim = new THREE.Mesh(new THREE.TorusGeometry(0.099 * Lm, 0.008, 5, 16), accent); hemTrim.rotation.x = Math.PI / 2; hemTrim.position.y = -0.26; thigh.add(hemTrim);
     }
     const knee = new THREE.Group(); knee.position.y = -0.44; thigh.add(knee);
-    knee.add(ball(0.058 * Lm, skin));
-    const sh = taper(0.058 * Lm, 0.04 * Lm, 0.42, skin); sh.position.y = -0.21; knee.add(sh);
-    const calf = ball(0.062 * Lm, skin); calf.position.set(0, -0.14, -0.012); calf.scale.set(1, 1.5, 1); knee.add(calf);
+    knee.add(ball(0.06 * Lm, skin));
+    const sh = muscle(0.062 * Lm, 0.036 * Lm, 0.42, 0.22, 0.28, skin, 20, 1.1); knee.add(sh);
     const sk = taper(0.045 * Lm, 0.048 * Lm, 0.13, sock); sk.position.y = -0.37; knee.add(sk);
     const foot = new THREE.Group(); foot.position.y = -0.44; knee.add(foot);
-    const f = cast(new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.07, 0.17), shoe)); f.position.set(0, -0.03, 0.03); foot.add(f);
-    const toe = ball(0.052, shoe); toe.scale.set(1, 0.72, 1.35); toe.position.set(0, -0.035, 0.12); foot.add(toe);
-    const heel = new THREE.Mesh(new THREE.BoxGeometry(0.102, 0.05, 0.04), shoeTab); heel.position.set(0, -0.025, -0.045); foot.add(heel);
-    const lace = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.012, 0.09), shoeTab); lace.position.set(0, 0.008, 0.06); foot.add(lace);
-    const so = new THREE.Mesh(new THREE.BoxGeometry(0.108, 0.02, 0.26), sole); so.position.set(0, -0.075, 0.06); foot.add(so);
+    const up = ball(0.056, shoe); up.scale.set(1, 0.72, 2.0); up.position.set(0, -0.03, 0.045); foot.add(up); // upper
+    const toe = ball(0.052, shoe); toe.scale.set(1, 0.62, 1.25); toe.position.set(0, -0.04, 0.125); foot.add(toe);
+    const heel = ball(0.05, shoeTab); heel.scale.set(1.0, 0.9, 0.9); heel.position.set(0, -0.03, -0.055); foot.add(heel);
+    const lace = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.008, 0.085), shoeTab); lace.position.set(0, 0.022, 0.06); lace.rotation.x = -0.25; foot.add(lace);
+    const so = ball(0.06, sole); so.scale.set(1, 0.24, 2.7); so.position.set(0, -0.07, 0.05); foot.add(so);
     return { thigh, knee, foot };
   };
   const legL = leg(1), legR = leg(-1);
@@ -259,10 +269,11 @@ export function buildCharacter(look, team) {
   const numTex = canvasTex(64, 64, (g, w, h) => { g.clearRect(0, 0, w, h); g.fillStyle = hex(T.trim); g.font = '800 40px Segoe UI, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String((A.id * 7 + 3 + team * 10) % 99), 32, 34); });
   const num = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), new THREE.MeshBasicMaterial({ map: numTex, transparent: true, depthWrite: false }));
   num.position.set(0, 0.36, -0.136 * B); num.rotation.y = Math.PI; spine.add(num);
-  const neck = taper(0.042, 0.05, 0.1, skin, 10); neck.position.y = 0.67; spine.add(neck);
+  const neck = taper(0.05, 0.06, 0.13, skin, 14); neck.position.y = 0.68; spine.add(neck);
+  for (const sx of [-1, 1]) { const trap = ball(0.05, female ? skin : shirtPlain); trap.scale.set(1.5, 0.7, 1); trap.position.set(sx * 0.085 * S, 0.62, -0.01); trap.rotation.z = -sx * 0.5; spine.add(trap); } // trapezius slope
 
   // head: face, ears, hair or cap
-  const head = new THREE.Group(); head.name = 'head'; head.position.y = 0.78; head.scale.setScalar(A.head); spine.add(head);
+  const head = new THREE.Group(); head.name = 'head'; head.position.y = 0.78; head.scale.setScalar(A.head * 1.07); spine.add(head);
   const skull = cast(new THREE.Mesh(new THREE.SphereGeometry(0.105, 26, 20), skin)); skull.scale.set(0.9, 1.06, 1); head.add(skull);
   const jaw = ball(female ? 0.064 : 0.072, skin); jaw.scale.set(1, 0.85, 0.95); jaw.position.set(0, -0.055, 0.03); head.add(jaw);
   const nose = ball(0.016, skin); nose.scale.set(0.9, 1.1, 1.2); nose.position.set(0, -0.008, 0.108); head.add(nose);
@@ -295,15 +306,15 @@ export function buildCharacter(look, team) {
   // arms: sleeves on tees, bare on tanks; wristbands on both wrists; hand with thumb
   const arm = (sx, racketHand) => {
     const sh = new THREE.Group(); sh.position.set(sx * 0.215 * S, 0.53, 0); sh.rotation.order = 'YXZ'; spine.add(sh);
-    sh.add(ball(0.06 * Lm, female ? skin : shirtPlain));
-    const up = taper(0.05 * Lm, 0.04 * Lm, 0.3, skin); up.position.y = -0.15; sh.add(up);
+    sh.add(ball(0.068 * Lm, female ? skin : shirtPlain)); // deltoid
+    const up = muscle(0.056 * Lm, 0.04 * Lm, 0.3, 0.3, 0.16, skin, 18, 1.0); sh.add(up);
     if (!female) {
-      const sleeve = taper(0.064 * Lm, 0.06 * Lm, 0.15, shirtPlain); sleeve.position.y = -0.09; sh.add(sleeve);
+      const sleeve = taper(0.062 * Lm, 0.056 * Lm, 0.15, shirtPlain, 18); sleeve.position.y = -0.085; sh.add(sleeve);
       const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.061 * Lm, 0.008, 5, 14), accent); cuff.rotation.x = Math.PI / 2; cuff.position.y = -0.165; sh.add(cuff);
     }
     const elbow = new THREE.Group(); elbow.position.y = -0.31; sh.add(elbow);
     elbow.add(ball(0.04 * Lm, skin));
-    const fa = taper(0.04 * Lm, 0.03 * Lm, 0.29, skin); fa.position.y = -0.16; elbow.add(fa);
+    const fa = muscle(0.044 * Lm, 0.029 * Lm, 0.29, 0.15, 0.14, skin, 18, 0.95); elbow.add(fa);
     const wb = taper(0.034 * Lm, 0.034 * Lm, 0.045, racketHand ? accent : trim); wb.position.y = -0.285; elbow.add(wb);
     const hand = new THREE.Group(); hand.position.y = -0.335; elbow.add(hand);
     const palm = ball(0.04, skin); palm.scale.set(0.9, 1.2, 0.65); hand.add(palm);
