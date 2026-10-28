@@ -96,6 +96,18 @@ export function serveBallHeight(t) {
   return 0.1 + 0.86 * Math.abs(Math.cos(Math.PI * ph));
 }
 
+/**
+ * Spin meets glass: topspin climbs the wall (the ball comes off it higher and faster), backspin drops it dead. The wall also
+ * strips part of the spin. The fence barely grips.
+ */
+function wallSpin(b, normalSpeed, mesh) {
+  const s = b.sb || 0;
+  if (!s) return;
+  const k = Math.min(1, normalSpeed / 12) * (mesh ? 0.15 : 1);
+  b.vy += -s * PHYS.WALL_KICK * k;
+  b.sb = s * (mesh ? 0.9 : 0.55);
+}
+
 export function makeBall() {
   return { x: 0, y: 1, z: 0, vx: 0, vy: 0, vz: 0, sb: 0, ss: 0 };
 }
@@ -188,6 +200,7 @@ export function stepBall(b, dt, events) {
       b.vz += -hx0 * (b.ss || 0) * PHYS.WALL_SPIN * (mesh ? 0.3 : 1); // sidespin kicks the ball along the glass, much less off the fence
       b.vz *= mesh ? PHYS.MESH_FRIC : PHYS.WALL_FRIC;
       b.vy *= mesh ? PHYS.MESH_FRIC : PHYS.WALL_FRIC;
+      wallSpin(b, Math.abs(b.vx), mesh);
     }
   }
   // back walls
@@ -203,6 +216,7 @@ export function stepBall(b, dt, events) {
       b.vx += hz0 * (b.ss || 0) * PHYS.WALL_SPIN * (mesh ? 0.3 : 1);
       b.vx *= mesh ? PHYS.MESH_FRIC : PHYS.WALL_FRIC;
       b.vy *= mesh ? PHYS.MESH_FRIC : PHYS.WALL_FRIC;
+      wallSpin(b, Math.abs(b.vz), mesh);
     }
   }
 

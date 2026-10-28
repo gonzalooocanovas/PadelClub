@@ -319,7 +319,10 @@ function chooseShot(inp, game, p, os, skill) {
     const r = rnd();
     if (r < skill.smash * (netOpp === 0 ? 1.0 : 0.6)) inp.mod = 0;
     else inp.mod = rnd() < 0.5 ? 2 : 1;
-    if (inp.mod === 0) inp.az = os * (netOpp ? 5 : 8);
+    if (inp.mod === 0) {
+      inp.az = os * (netOpp ? 5 : 8);
+      if (rnd() < skill.smash * 0.45 * (1 - skill.noise * 0.3)) inp.az = os * 3.4; // go for the kill: "por 4" (needs a clean contact)
+    }
     return;
   }
   if (netOpp >= 1 && rnd() < skill.lob * 0.55) { // globo over the net players (not every time: it is a change of pace, not a habit)

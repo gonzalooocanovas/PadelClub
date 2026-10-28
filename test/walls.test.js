@@ -38,3 +38,31 @@ test('the floor bounces higher than before and a hard drop keeps most of its hei
   assert.ok(peak > 1.15 && peak < 1.7, `bounce height ${peak.toFixed(2)} m from 2 m`);
   assert.ok(wallE(10, false) > wallE(10, true) * 2);
 });
+
+test('spin meets glass: topspin climbs the wall, backspin drops it', () => {
+  const hit = (sb) => {
+    const b = { ...makeBall(), x: 0, y: 1.5, z: 9.0, vx: 0, vy: 0, vz: 14, sb };
+    rebound(b);
+    return b.vy;
+  };
+  const top = hit(-12), none = hit(0), back = hit(12);
+  assert.ok(top > none + 0.5 && back < none - 0.5, `topspin ${top.toFixed(1)}, flat ${none.toFixed(1)}, backspin ${back.toFixed(1)} m/s vertical off the glass`);
+});
+
+test('"por 4": a clean short smash from the net bounces out of the court over the fence, a poor one does not', async () => {
+  const { PadelGame } = await import('../shared/game.js');
+  const g = new PadelGame({ rng: () => 0.5 });
+  const fly = (q) => {
+    const b = { x: 0.5, y: 2.6, z: -2.4, vx: 0, vy: 0, vz: 0, sb: 0, ss: 0, hw: 5, fe: 0.85, ff: 0.86 };
+    const v = g.planShot('smash', b, 1, 1.5, 3.5, q, 8, null, { face: 0, e: 0.1, lateral: 0, forward: 0, spinMul: 1, powerMul: 1 });
+    const ball = { ...b, vx: v.vx, vy: v.vy, vz: v.vz, sb: v.sb, ss: v.ss };
+    let bounced = false;
+    for (let i = 0; i < 400; i++) {
+      const ev = []; stepBall(ball, 1 / 60, ev);
+      for (const e of ev) { if (e.type === 'floor') bounced = true; if (e.type === 'out' && bounced) return true; }
+    }
+    return false;
+  };
+  assert.equal(fly(0.95), true);
+  assert.equal(fly(0.6), false);
+});

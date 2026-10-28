@@ -412,7 +412,7 @@ export class UI {
         <span class="k">R</span><span>Hits a slice (press it instead of Space): backspin that skids low and slow off the floor and glass.</span>
         <span class="k">Q</span><span>Hits a soft shot: chiquita near the net, dejada (drop shot) from deep, <b>víbora</b> (sidespin) on overheads.</span>
         <span class="k">E</span><span>Hits a controlled shot: block on low balls, <b>bandeja</b> (backspin, placed deep) on overheads.</span>
-        <span class="k">G / Enter</span><span>Globo (lob), a high ball over opponents at the net. Mouse right-click does the same. Overheads with no key: remate (smash).</span>
+        <span class="k">G / Enter</span><span>Globo (lob), a high ball over opponents at the net. Mouse right-click does the same. Overheads with no key: remate (smash). Smash while holding down (short) with a clean contact: a kill that bounces out of the court, "por 4".</span>
         <span class="k">X</span><span>Jump for high balls.</span>
         <span class="k">Shift</span><span>Sprint (uses stamina).</span>
         <span class="k">Tab / Esc</span><span>Match stats / menu. Keys 1–4 send quick chat.</span>
@@ -432,9 +432,9 @@ export class UI {
       ${tog('announcer', 'Announcer (spoken score)')}
       ${range('voice', 0, 1, 0.05, 'Announcer volume')}
       ${range('music', 0, 1, 0.05, 'Music volume')}
-<div class="setting"><span>Camera</span><div class="seg">${['player', 'broadcast', 'tactical', 'custom'].map((c) => `<button data-act="camera" data-val="${c}" class="${settings.camera === c ? 'on' : ''}">${c}</button>`).join('')}</div></div>
+<div class="setting"><span>Camera</span><div class="seg">${['player', 'first', 'wall', 'corner', 'side', 'broadcast', 'tactical', 'custom'].map((c) => `<button data-act="camera" data-val="${c}" class="${settings.camera === c ? 'on' : ''}">${c}</button>`).join('')}</div></div>
       ${tog('ballTrack', 'Camera drifts toward the ball')}
-      ${settings.camera === 'custom' ? range('camDist', 4, 16, 0.1, 'Custom: distance') + range('camHeight', 2.5, 16, 0.1, 'Custom: height') + range('camSmooth', 2, 12, 0.5, 'Custom: smoothing') + range('camFov', 36, 70, 1, 'Custom: field of view') : '<p class="mute" style="font-size:12px;margin:4px 0">Player: behind you · Broadcast: whole court, high · Tactical: overhead view of the positions · Custom: your own distance, height, smoothing and field of view.</p>'}
+      ${settings.camera === 'custom' ? range('camDist', 4, 16, 0.1, 'Custom: distance') + range('camHeight', 2.5, 16, 0.1, 'Custom: height') + range('camSmooth', 2, 12, 0.5, 'Custom: smoothing') + range('camFov', 36, 70, 1, 'Custom: field of view') : '<p class="mute" style="font-size:12px;margin:4px 0">Player: behind you · First: over your shoulder · Wall: low behind the glass, great for wall play · Corner: high from a back corner · Side: television side-line · Broadcast: whole court, high · Tactical: overhead · Custom: your own. Press C in a match to cycle.</p>'}
       ${range('ballScale', 1, 4, 0.1, 'Ball size (visibility)')}
       <div class="setting"><span>Aim with the mouse (click to hit)</span><div class="seg"><button data-act="mouseAim" data-val="1" class="${mouseAimOn ? 'on' : ''}">On</button><button data-act="mouseAim" data-val="0" class="${mouseAimOn ? '' : 'on'}">Off</button></div></div>
       ${tog('timing', 'Timing indicator')}

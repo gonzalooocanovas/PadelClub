@@ -20,6 +20,7 @@ export const PHYS = {
   FLOOR_FRIC: 0.86, // horizontal speed kept per floor bounce
   WALL_E: 0.82, // glass: hard and lively
   WALL_FRIC: 0.97,
+  WALL_KICK: 0.11, // m/s of extra vertical speed off the glass per unit of topspin (backspin takes it away)
   MESH_E: 0.34, // fence (verja): soft and dead
   MESH_FRIC: 0.84,
   DT: 1 / 60,

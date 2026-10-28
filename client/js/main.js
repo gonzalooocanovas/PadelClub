@@ -2,7 +2,7 @@ import { Net } from './net.js';
 import { World } from './scene.js';
 import { Sound } from './audio.js';
 import { UI, toast } from './ui.js';
-import { MatchClient } from './game.js';
+import { MatchClient, CAMERA_ORDER } from './game.js';
 import { settings, setSetting, onSetting } from './settings.js';
 import { Preview } from './preview.js';
 import { DEFAULT_LOOKS, sanitizeLook } from '/shared/looks.js';
@@ -89,6 +89,13 @@ function setMouseAim(on, fromPause) {
   if (fromPause) ui.pauseMenu(!!local, on); else if (document.querySelector('#modal h2')?.textContent === 'Settings') ui.settingsModal(() => {});
 }
 document.addEventListener('keydown', (e) => {
+  if ((e.key === 'c' || e.key === 'C') && screen === 'game' && !ui.modal && !e.ctrlKey && !e.metaKey && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || '')) {
+    const i = CAMERA_ORDER.indexOf(settings.camera);
+    const next = CAMERA_ORDER[(i + 1) % CAMERA_ORDER.length];
+    setSetting('camera', next);
+    toast(`Camera: ${next}`);
+    return;
+  }
   if ((e.key === 'm' || e.key === 'M') && screen === 'game' && !ui.modal && !/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || '')) setMouseAim(!input.settings.mouseAim);
 });
 

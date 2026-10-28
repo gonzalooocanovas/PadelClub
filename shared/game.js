@@ -297,6 +297,7 @@ export class PadelGame {
     let tx = clamp(aimX, -lim, lim);
     let depth = clamp(Math.abs(aimZ), 1, 9.4);
     let speed = 19;
+    let kill = false;
     let sb = 0, ss = 0; // backspin(+)/topspin(-), sidespin
     switch (kind) {
       case 'serve': speed = (9.5 + 5 * q) * (this._servePace || 1); depth = clamp(Math.abs(aimZ), 2.5, 9); sb = 4; break; // (a charged serve may overshoot the box, see doServe)
@@ -304,7 +305,11 @@ export class PadelGame {
       case 'backhand': sb = -6; depth = clamp(depth, 3, 9.2); break;
       case 'slice': speed = 13.5; sb = 17; depth = clamp(depth, 3, 9.2); break; // skidding backspin
       case 'volley': speed = 16.5; depth = clamp(depth, 3, 9); sb = 5; break;
-      case 'smash': speed = 30; depth = clamp(depth, 2.5, 8.5); sb = -4; break;
+      case 'smash': speed = 30; depth = clamp(depth, 2.5, 8.5); sb = -4;
+        // "por 4": a clean smash aimed short and hit from the net comes down steeply with topspin, bounces very high and leaves the
+        // court over the fence: a winner (needs a clean contact: a poor one just goes into the net or the glass)
+        if (q >= 0.8 && depth <= 4.8 && Math.abs(b.z) < 5.5 && b.y >= 2.2) { speed = 36; sb = -12; kill = true; }
+        break;
       case 'bandeja': speed = 13.5; depth = clamp(Math.max(depth, 6.5), 6.5, 9); sb = 15; break; // slow, backspin, stays low off the glass
       case 'vibora': // fast, sidespin: kicks sideways off the glass
         speed = 19; depth = clamp(depth, 5, 9); tx = clamp(tx * 1.2, -lim - 0.1, lim + 0.1); sb = 7;
@@ -343,7 +348,7 @@ export class PadelGame {
       ? clamp(1.5 + dist * 0.05, 1.7, 2.4) * (0.7 + 0.3 * lobQ)
       : dist / (speed * (0.8 + 0.4 * q + Math.min(0.2, inSpeed * 0.007))); // returns carry some of the incoming pace
     if (ctx && kind !== 'lob' && kind !== 'serve') T *= 1 + 0.16 * ctx.face; // open face = higher, slower arc
-    T = Math.max(T, 0.28);
+    T = Math.max(T, kill ? 0.13 : 0.28);
     const spin = { sb, ss };
     // a mishit (bots only) ends in the net or long: 60% / 40%
     const slipNet = !!ctx?.slip && this.rng() < 0.6;
@@ -494,6 +499,7 @@ export class PadelGame {
     b.vx = v.vx; b.vy = v.vy; b.vz = v.vz; b.sb = v.sb; b.ss = v.ss;
 
     r.lastTeam = p.team; r.lastSlot = p.slot; r.bounces = 0; r.hits++; r.netTouched = false; r.serving = false; r.exited = false;
+    this.lastKind = kind;
     const st = this.stats.players[p.slot];
     st.hits++;
     if (kind === 'smash') st.smashes++;
@@ -546,7 +552,7 @@ export class PadelGame {
         if (r.serving) this.fault('out');
         else this.endPoint(1 - r.lastTeam, 'out');
       } else {
-        this.endPoint(r.lastTeam, 'out-after-bounce');
+        this.endPoint(r.lastTeam, 'out-after-bounce', { por: true });
       }
       return;
     }
@@ -597,7 +603,7 @@ export class PadelGame {
     this.holdBall();
   }
 
-  endPoint(winner, reason) {
+  endPoint(winner, reason, extra) {
     if (this.phase !== 'rally' && this.phase !== 'serve') return;
     const r = this.rally;
     const st = this.stats.players;
@@ -617,7 +623,7 @@ export class PadelGame {
     const sc = pointWon(this.match, winner);
     const marks = sc.filter((s) => s.type !== 'point');
     const ev = {
-      e: 'point', winner, reason, rally: r.hits, by: lastSlot,
+      e: 'point', winner, reason, rally: r.hits, by: lastSlot, por: !!extra?.por && ['smash', 'volley', 'vibora', 'bandeja'].includes(this.lastKind),
       marks, score: scoreView(this.match),
       st: this.stats.players.map((s) => ({ ...s })), lr: this.stats.longestRally,
     };

@@ -22,7 +22,14 @@ export const CAMERAS = {
   player: { dist: 7.2, height: 4.6, follow: 0.85, lookAhead: 9, ball: 0.25, smooth: 7, fov: 52 },
   broadcast: { dist: 12.5, height: 9, follow: 0.18, center: true, ball: 0.12, smooth: 4, fov: 42 },
   tactical: { dist: 5, height: 14, follow: 0.5, lookAhead: 4, ball: 0.1, smooth: 5, fov: 54 },
+  // fixed-position cameras that follow the ball (mode): side = television side-line, corner = high diagonal from a back corner,
+  // wall = low behind the glass (best for watching wall play), first = over the shoulder at head height
+  side: { mode: 'side', smooth: 3.2, fov: 46 },
+  corner: { mode: 'corner', smooth: 3, fov: 50 },
+  wall: { mode: 'wall', smooth: 4, fov: 56 },
+  first: { dist: 2.6, height: 2.1, follow: 0.9, lookAhead: 14, ball: 0.3, smooth: 9, fov: 68 },
 };
+export const CAMERA_ORDER = ['player', 'first', 'wall', 'corner', 'side', 'broadcast', 'tactical'];
 export function cameraConfig(s) {
   if (s.camera === 'custom') return { dist: s.camDist, height: s.camHeight, follow: 0.85, lookAhead: 9, ball: 0.25, smooth: s.camSmooth, fov: s.camFov };
   return CAMERAS[s.camera] || CAMERAS.player;
@@ -371,7 +378,7 @@ export class MatchClient {
           }, 350);
           const top = e.marks.find((m) => m.type === 'match') || e.marks.find((m) => m.type === 'set') || e.marks.find((m) => m.type === 'game');
           const team = e.winner === this.team ? 'Your team' : 'Opponents';
-          const why = e.reason === 'bounce' && e.rally === 1 ? 'Ace' : REASONS[e.reason] || '';
+          const why = e.por ? '¡Por 4!' : e.reason === 'bounce' && e.rally === 1 ? 'Ace' : REASONS[e.reason] || '';
           if (top) {
             const word = { match: 'Game, set & match', set: 'Set', game: 'Game' }[top.type];
             this.hud.banner(word, `${team} · ${why} · rally of ${e.rally}`, 2400);
@@ -537,9 +544,27 @@ export class MatchClient {
     this.hud.timing(x, y, inner + Math.min(err, 0.5) * 220, zone, zone === 'perfect' ? 'PERFECTO' : zone === 'good' ? 'BIEN' : '');
   }
 
+  /** Cameras with their own position (side, corner, wall): they stay out of the way and keep the ball in view. */
+  updateFixedCamera(dt, c) {
+    const cam = this.world.camera;
+    const b = this.ballView, os = this.os;
+    let want;
+    if (c.mode === 'side') want = new THREE.Vector3(14.5, 8.8, clamp(b.z * 0.6, -6, 6)); // high enough to clear the stands and pergolas
+    else if (c.mode === 'corner') want = new THREE.Vector3(8.5, 8.2, -os * 15.5);
+    else want = new THREE.Vector3(clamp(b.x * 0.5, -3, 3) + this.me.x * 0.3, 2.1, -os * 12.4); // wall: low, behind your own glass
+    if (!this.camPos) this.camPos = want.clone();
+    this.camPos.lerp(want, 1 - Math.exp(-dt * c.smooth));
+    const focus = new THREE.Vector3(b.x * 0.7, Math.min(b.y, 2.2) * 0.8 + 0.4, b.z * 0.85);
+    this.camLook.lerp(focus, 1 - Math.exp(-dt * c.smooth * 1.4));
+    this.world.baseFov = c.fov;
+    cam.position.copy(this.camPos);
+    cam.lookAt(this.camLook);
+  }
+
   updateCamera(dt) {
     const cam = this.world.camera;
     const c = cameraConfig(settings);
+    if (c.mode) { this.updateFixedCamera(dt, c); return; }
     const want = new THREE.Vector3(this.me.x * c.follow, c.height, this.me.z - this.os * c.dist);
     // stay inside the venue walls (the room backdrop is at 17 m)
     want.z = clamp(want.z, -15.5, 15.5);

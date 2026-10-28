@@ -119,3 +119,9 @@ Method: a simulation harness measured how bot pairs really move and why they los
 - Levels after retuning (20 matches each): Legend beat Pro 15/20, Pro beat Club 16/20, Club beat Rookie 17/20, Legend beat Rookie 20/20
 - ✅ After a fault everybody (server, partner, receivers) returns to their starting place for the second serve
 - ✅ Serve power has a price: a full charge (+22% pace) tends to fly long past the service line (a clean contact keeps it closer, a mistimed one sails); a tap or bot serve is unaffected
+
+## Wall play, "por 4", cameras (latest pass)
+- ✅ "Por 4": a clean short smash from near the net comes down steeply with topspin and bounces out of the court over the fence (winner, "¡Por 4!"); bots go for it with a probability tied to their smash skill. Humans: smash while holding down (short) with a clean contact
+- ✅ Wall spin: topspin climbs the glass, backspin drops the ball dead, the wall strips part of the spin
+- ✅ Four new cameras (first, wall, corner, side) and C to cycle them. NOT visually verified yet
+- 🟡 Bots still react to wall rebounds rather than choosing wall plays on purpose
