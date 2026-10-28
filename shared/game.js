@@ -93,6 +93,7 @@ export class PadelGame {
       place(recvSlot ^ 1, sx, os * 2.3);
     }
     this.serverSlot = serverSlot;
+    this.startPos = this.players.map((p) => [p.x, p.z]); // where everybody stands for this point (restored after a fault)
     this.rally = {
       serving: true, faults: 0, lastTeam: srv.team, lastSlot: serverSlot,
       bounces: 0, hits: 0, netTouched: false, serveXSign: Math.sign(sx),
@@ -585,7 +586,10 @@ export class PadelGame {
     this.phase = 'serve';
     this.serveWait = 1.2;
     this.serveIdle = 0;
-    for (const p of this.players) { p.swing = null; p.cd = 0; }
+    for (const [i, p] of this.players.entries()) { // after a fault everybody goes back to their starting place for the second serve
+      p.swing = null; p.cd = 0; p.vx = p.vz = 0;
+      if (this.startPos) { p.x = this.startPos[i][0]; p.z = this.startPos[i][1]; }
+    }
     this.holdBall();
   }
 

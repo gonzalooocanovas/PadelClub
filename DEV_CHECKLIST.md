@@ -117,3 +117,4 @@ Method: a simulation harness measured how bot pairs really move and why they los
 - ✅ Mishits instead of passive misses: a flubbing bot still goes for the ball and strikes it badly (into the net or long), so points end in errors rather than in free winners; rallies are now 6.5 / 9.6 / 15.6 / 25 shots for Rookie / Club / Pro / Legend
 - ✅ With a person as partner the bot follows THEIR line (up when you are up, back when you are back; back to cover a lob) and does not steal balls that are yours (needs a clear 0.9 m advantage)
 - Levels after retuning (20 matches each): Legend beat Pro 15/20, Pro beat Club 16/20, Club beat Rookie 17/20, Legend beat Rookie 20/20
+- ✅ After a fault everybody (server, partner, receivers) returns to their starting place for the second serve

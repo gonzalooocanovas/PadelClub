@@ -131,3 +131,14 @@ test('the server stays planted on the line until the serve is hit', () => {
   assert.equal(g.phase, 'serve');
   assert.equal(s.x, x); assert.equal(s.z, z);
 });
+
+test('after a fault everybody goes back to their starting place for the second serve', () => {
+  const g = new PadelGame({ rng: () => 0.5 });
+  const start = g.players.map((p) => [p.x, p.z]);
+  g.phase = 'rally';
+  g.rally = { serving: true, faults: 0, lastTeam: g.players[g.serverSlot].team, lastSlot: g.serverSlot, bounces: 0, hits: 1, netTouched: false, serveXSign: 1 };
+  for (const [i, p] of g.players.entries()) { p.x += 1.5; p.z += (i % 2 ? 1 : -1) * 0.8; p.vx = 3; } // the receivers moved after the serve
+  g.fault('long-or-wide');
+  assert.equal(g.phase, 'serve');
+  g.players.forEach((p, i) => { assert.deepEqual([p.x, p.z], start[i]); assert.equal(p.vx, 0); });
+});
