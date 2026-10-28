@@ -118,3 +118,4 @@ Method: a simulation harness measured how bot pairs really move and why they los
 - ✅ With a person as partner the bot follows THEIR line (up when you are up, back when you are back; back to cover a lob) and does not steal balls that are yours (needs a clear 0.9 m advantage)
 - Levels after retuning (20 matches each): Legend beat Pro 15/20, Pro beat Club 16/20, Club beat Rookie 17/20, Legend beat Rookie 20/20
 - ✅ After a fault everybody (server, partner, receivers) returns to their starting place for the second serve
+- ✅ Serve power has a price: a full charge (+22% pace) tends to fly long past the service line (a clean contact keeps it closer, a mistimed one sails); a tap or bot serve is unaffected

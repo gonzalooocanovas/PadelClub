@@ -126,7 +126,7 @@ export class PadelGame {
       mod: inp.mod === 1 || inp.mod === 2 || inp.mod === 3 ? inp.mod : 0, lob: !!inp.lob,
       keep: !!inp.keep, // bots decide their target when they start the swing and keep it until contact
     };
-    if (inp.swing) p.wantSwing = { ax: p.input.ax, az: p.input.az, mod: p.input.mod, lob: p.input.lob, pace: clamp(+inp.pace || 1, 0.6, 1.15), slip: !!inp.slip };
+    if (inp.swing) p.wantSwing = { ax: p.input.ax, az: p.input.az, mod: p.input.mod, lob: p.input.lob, pace: clamp(+inp.pace || 0.9, 0.6, 1.15), slip: !!inp.slip };
     if (inp.jump) p.wantJump = true;
   }
 
@@ -276,7 +276,7 @@ export class PadelGame {
 
   startSwing(p, sw) {
     if (this.phase === 'serve' && p.slot !== this.serverSlot) return;
-    p.swing = { t: 0, done: false, ax: sw.ax, az: sw.az, mod: sw.mod, lob: sw.lob, pace: sw.pace || 1, slip: !!sw.slip };
+    p.swing = { t: 0, done: false, ax: sw.ax, az: sw.az, mod: sw.mod, lob: sw.lob, pace: sw.pace || 0.9, slip: !!sw.slip };
     p.kind = SHOT_IDS.indexOf(this.phase === 'serve' ? 'serve' : this.classify(p, sw));
   }
 
@@ -299,7 +299,7 @@ export class PadelGame {
     let speed = 19;
     let sb = 0, ss = 0; // backspin(+)/topspin(-), sidespin
     switch (kind) {
-      case 'serve': speed = (9.5 + 5 * q) * (this._servePace || 1); depth = clamp(Math.abs(aimZ), 2.5, 6.3); sb = 4; break;
+      case 'serve': speed = (9.5 + 5 * q) * (this._servePace || 1); depth = clamp(Math.abs(aimZ), 2.5, 9); sb = 4; break; // (a charged serve may overshoot the box, see doServe)
       case 'forehand': sb = -9; depth = clamp(depth, 3, 9.2); break; // topspin drive
       case 'backhand': sb = -6; depth = clamp(depth, 3, 9.2); break;
       case 'slice': speed = 13.5; sb = 17; depth = clamp(depth, 3, 9.2); break; // skidding backspin
@@ -415,8 +415,12 @@ export class PadelGame {
     const tiredK = clamp((PLAYER.TIRED_FROM - p.stamina) / PLAYER.TIRED_FROM, 0, 1);
     const q = clamp(1.02 - Math.abs(b.y - 0.62) / 0.3 - 0.2 * tiredK, 0.3, 0.98); // best at waist height; the window is narrow, and a tired server is less accurate
     const spinOv = sw.mod === 3 ? { sb: 15 } : sw.mod === 1 ? { sb: -9 } : null; // R = slice serve, Q = kick serve
-    this._servePace = sw.pace || 1; // bots serve a little softer; humans choose by holding the key (charge) and releasing
-    const v = this.planShot('serve', b, os, clamp(ax, lo, hi), os * clamp(Math.abs(aim.az), 2.5, 6.3), q, 0, spinOv);
+    this._servePace = sw.pace || 0.9; // bots serve a little softer; humans choose by holding the key (charge) and releasing
+    // Hitting it with everything (a full charge) costs control: it tends to fly long, past the service line. A clean contact
+    // keeps it closer; a mistimed one sails.
+    const over = clamp(((sw.pace || 1) - 0.9) / 0.22, 0, 1); // 0 for a tap, 1 for a full charge (bots serve at 0.68-0.8 and are not affected)
+    const overshoot = over * (1.3 + 2.2 * (1 - q) + (this.rng() - 0.5) * 1.6);
+    const v = this.planShot('serve', b, os, clamp(ax, lo, hi), os * (clamp(Math.abs(aim.az), 2.5, 6.3) + Math.max(0, overshoot)), q, 0, spinOv);
     b.vx = v.vx; b.vy = v.vy; b.vz = v.vz; b.sb = v.sb; b.ss = v.ss;
     this.phase = 'rally';
     const r = this.rally;

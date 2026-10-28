@@ -180,7 +180,7 @@ export class UI {
         <div class="topright"><span id="clock">0:00</span><span class="status"><span class="dot" id="pingDot"></span><span id="ping">– ms</span></span></div>
         <div class="drillbar hidden" id="drillbar"></div>
         <div class="rallychip hidden" id="rally"></div>
-        <div class="chargebar hidden" id="charge"><span>Serve power</span><div><i></i></div></div>
+        <div class="chargebar hidden" id="charge"><span>Serve power · full = risk of going long</span><div><i></i></div></div>
         <div class="banner" id="banner"><div class="big"></div><div class="sub"></div></div>
         <div class="feedback" id="feedback"></div>
         <div class="timing hidden" id="timing"><i class="t-out"></i><i class="t-in"></i><span></span></div>
