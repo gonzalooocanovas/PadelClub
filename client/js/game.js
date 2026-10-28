@@ -425,7 +425,7 @@ export class MatchClient {
     if (this.stopped) return;
     dt = Math.min(dt, 0.1);
     if (this.replay) { this.playReplay(dt); return; }
-    if (this.paused && this.local) return; // solo match paused: everything stands still
+    if (this.paused && this.local) { this.updateCamera(dt); return; } // solo match paused: everything stands still, but the view follows the settings (camera, ball size…)
     this.updateAim(dt);
 
     this.updateCharge(dt);

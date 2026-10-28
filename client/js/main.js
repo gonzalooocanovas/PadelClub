@@ -65,6 +65,22 @@ const myName = () => (val('nameInput').trim() || net.name || 'Guest').slice(0, 1
 const ui = new UI(document.getElementById('ui'), { sound, act });
 ui.getMouseAim = () => input.settings.mouseAim;
 
+// The pause menu is a hub: Settings, Controls and the rest open on top of it and closing them comes back to the pause menu
+// (the match stays paused); only Resume (or Esc on the pause menu itself) goes back to the game.
+let inPause = false;
+function openPauseMenu() {
+  inPause = true;
+  ui.pauseMenu(!!local, input.settings.mouseAim);
+  match?.setPaused(true); local?.setPaused(true);
+}
+function closeModalOrBack() {
+  const title = document.querySelector('#modal h2')?.textContent;
+  ui.closeModal();
+  if (inPause && title && title !== 'Paused') { openPauseMenu(); return; }
+  inPause = false;
+  match?.setPaused(false); local?.setPaused(false);
+}
+
 function setMouseAim(on, fromPause) {
   input.settings.mouseAim = on;
   input.settings.scheme = 'custom';
@@ -80,6 +96,7 @@ document.addEventListener('keydown', (e) => {
 
 function showHome() {
   screen = 'home';
+  inPause = false;
   sound.startMusic('menu');
   stopLocal();
   if (match) { match.stop(); match = null; }
@@ -441,7 +458,7 @@ function act(name, d, el) {
     case 'pauseAccept': net.send({ t: 'pauseAccept' }); break;
     case 'pauseDeny': net.send({ t: 'pauseDeny' }); ui.clearPauseOverlay(); break;
     case 'pauseResume': net.send({ t: 'pauseResume' }); break;
-    case 'closeModal': ui.closeModal(); match?.setPaused(false); local?.setPaused(false); break;
+    case 'closeModal': closeModalOrBack(); break;
     case 'toggle':
       setSetting(d.key, d.val === '1');
       ui.settingsModal(() => {});
@@ -551,7 +568,7 @@ net.on('room', (m) => {
 });
 
 net.on('start', (m) => {
-  queued = false;
+  queued = false; inPause = false;
   clearInterval(pauseTimer); ui.clearPauseOverlay();
   if (match) match.stop();
   ui.clear();
@@ -563,9 +580,7 @@ net.on('start', (m) => {
   match = new MatchClient({
     net: m.local ? localProxy : net, world, hud, sound, start: m, input,
     onReplay: (on) => local?.setPaused(on),
-    onPause: () => {
-      if (ui.modal) { ui.closeModal(); match?.setPaused(false); local?.setPaused(false); } else { ui.pauseMenu(!!local, input.settings.mouseAim); match?.setPaused(true); local?.setPaused(true); }
-    },
+    onPause: () => { if (ui.modal) closeModalOrBack(); else openPauseMenu(); },
   });
   screen = 'game';
   sound.unlock();
