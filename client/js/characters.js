@@ -208,7 +208,8 @@ export function buildCharacter(look, team) {
   const muscle = (r0, r1, len, at, bulge, mat, seg = 20, depth = 1) => {
     const pts = [];
     for (let i = 0; i <= 14; i++) {
-      const t = i / 14, base = r0 + (r1 - r0) * t, k = Math.exp(-(((t - at) / 0.28) ** 2));
+      const t = i / 14, base = r0 + (r1 - r0) * t, sm = (x) => { x = Math.min(1, x); return x * x * (3 - 2 * x); };
+      const k = Math.exp(-(((t - at) / 0.28) ** 2)) * sm(t / 0.2) * sm((1 - t) / 0.2); // no bulge at the ends: joints stay continuous
       pts.push([base * (1 + bulge * k), -t * len]);
     }
     const g = new THREE.LatheGeometry(pts.map(([x, y]) => new THREE.Vector2(x, y)), seg);
@@ -222,8 +223,9 @@ export function buildCharacter(look, team) {
   const hips = new THREE.Group(); hips.name = 'hips'; root.add(hips);
 
   // pelvis + shorts or skirt
-  const pelvis = lathe([[0.001, -0.1], [0.15 * B, -0.1], [0.17 * B, -0.02], [0.155 * B, 0.06], [0.001, 0.06]], female ? skirtCol : shorts, 18);
-  pelvis.scale.z = 0.8; hips.add(pelvis);
+  const pelvis = lathe([[0.001, -0.12], [0.17 * B, -0.12], [0.2 * B, -0.05], [0.205 * B, 0.0], [0.178 * B, 0.065], [0.001, 0.065]], female ? skirtCol : shorts, 24);
+  pelvis.scale.z = 0.82; hips.add(pelvis);
+  for (const gx of [-1, 1]) { const glute = ball(0.08 * B, female ? skirtCol : shorts); glute.scale.set(1, 1.05, 0.9); glute.position.set(gx * 0.075 * B, -0.045, -0.07 * B); hips.add(glute); }
   const waist = new THREE.Mesh(new THREE.TorusGeometry(0.153 * B, 0.014, 6, 24), accent);
   waist.rotation.x = Math.PI / 2; waist.position.y = 0.055; waist.scale.set(1, 0.8, 1); hips.add(waist);
   if (female) {
@@ -234,22 +236,22 @@ export function buildCharacter(look, team) {
 
   // legs: tapered thigh and calf, shorts hem (not on skirts), sock, shoe with heel tab, toe cap and laces
   const leg = (sx) => {
-    const thigh = new THREE.Group(); thigh.position.set(sx * 0.095 * (0.9 + 0.1 * B), -0.03, 0); hips.add(thigh);
-    const th = muscle(0.1 * Lm, 0.064 * Lm, 0.44, 0.3, 0.2, skin, 22, 1.08); thigh.add(th);
+    const thigh = new THREE.Group(); thigh.position.set(sx * 0.108 * (0.9 + 0.1 * B), -0.03, 0); hips.add(thigh);
+    const th = muscle(0.118 * Lm, 0.07 * Lm, 0.44, 0.3, 0.17, skin, 24, 1.1); thigh.add(th);
     if (!female) {
-      const hem = taper(0.1 * Lm, 0.098 * Lm, 0.26, shorts, 16); hem.position.y = -0.13; thigh.add(hem);
-      const hemTrim = new THREE.Mesh(new THREE.TorusGeometry(0.099 * Lm, 0.008, 5, 16), accent); hemTrim.rotation.x = Math.PI / 2; hemTrim.position.y = -0.26; thigh.add(hemTrim);
+      const hem = taper(0.128 * Lm, 0.118 * Lm, 0.27, shorts, 22); hem.position.y = -0.125; hem.scale.z = 1.1; thigh.add(hem);
+      const hemTrim = new THREE.Mesh(new THREE.TorusGeometry(0.118 * Lm, 0.008, 5, 22), accent); hemTrim.rotation.x = Math.PI / 2; hemTrim.position.y = -0.26; hemTrim.scale.y = 1.1; thigh.add(hemTrim);
     }
     const knee = new THREE.Group(); knee.position.y = -0.44; thigh.add(knee);
-    knee.add(ball(0.06 * Lm, skin));
-    const sh = muscle(0.062 * Lm, 0.036 * Lm, 0.42, 0.22, 0.28, skin, 20, 1.1); knee.add(sh);
-    const sk = taper(0.045 * Lm, 0.048 * Lm, 0.13, sock); sk.position.y = -0.37; knee.add(sk);
+    knee.add(ball(0.05 * Lm, skin));
+    const sh = muscle(0.068 * Lm, 0.042 * Lm, 0.42, 0.22, 0.3, skin, 22, 1.12); knee.add(sh);
+    const sk = taper(0.05 * Lm, 0.056 * Lm, 0.14, sock, 16); sk.position.y = -0.365; knee.add(sk);
     const foot = new THREE.Group(); foot.position.y = -0.44; knee.add(foot);
-    const up = ball(0.056, shoe); up.scale.set(1, 0.72, 2.0); up.position.set(0, -0.03, 0.045); foot.add(up); // upper
-    const toe = ball(0.052, shoe); toe.scale.set(1, 0.62, 1.25); toe.position.set(0, -0.04, 0.125); foot.add(toe);
+    const up = ball(0.056, shoe); up.scale.set(1.12, 0.78, 2.1); up.position.set(0, -0.03, 0.045); foot.add(up); // upper
+    const toe = ball(0.052, shoe); toe.scale.set(1.12, 0.66, 1.3); toe.position.set(0, -0.04, 0.125); foot.add(toe);
     const heel = ball(0.05, shoeTab); heel.scale.set(1.0, 0.9, 0.9); heel.position.set(0, -0.03, -0.055); foot.add(heel);
     const lace = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.008, 0.085), shoeTab); lace.position.set(0, 0.022, 0.06); lace.rotation.x = -0.25; foot.add(lace);
-    const so = ball(0.06, sole); so.scale.set(1, 0.24, 2.7); so.position.set(0, -0.07, 0.05); foot.add(so);
+    const so = ball(0.06, sole); so.scale.set(1.15, 0.26, 2.8); so.position.set(0, -0.07, 0.05); foot.add(so);
     return { thigh, knee, foot };
   };
   const legL = leg(1), legR = leg(-1);
@@ -257,10 +259,10 @@ export function buildCharacter(look, team) {
   // torso: a lathe profile per kit, then scaled to the archetype's shoulders and depth
   const spine = new THREE.Group(); spine.name = 'spine'; spine.position.y = 0.06; hips.add(spine);
   const prof = female
-    ? [[0.001, 0], [0.12, 0.01], [0.122, 0.08], [0.135, 0.18], [0.155, 0.3], [0.17, 0.4], [0.172, 0.46], [0.15, 0.52], [0.085, 0.585], [0.05, 0.62], [0.001, 0.63]]
-    : [[0.001, 0], [0.135, 0.01], [0.14, 0.08], [0.15, 0.18], [0.17, 0.3], [0.19, 0.4], [0.195, 0.47], [0.17, 0.54], [0.09, 0.6], [0.05, 0.635], [0.001, 0.64]];
+    ? [[0.001, 0], [0.135, 0.01], [0.138, 0.08], [0.15, 0.18], [0.172, 0.3], [0.192, 0.4], [0.2, 0.46], [0.182, 0.52], [0.105, 0.585], [0.062, 0.62], [0.001, 0.63]]
+    : [[0.001, 0], [0.15, 0.01], [0.155, 0.08], [0.165, 0.18], [0.188, 0.3], [0.215, 0.4], [0.228, 0.47], [0.205, 0.54], [0.115, 0.6], [0.065, 0.635], [0.001, 0.64]];
   const torso = lathe(prof, shirt, 28);
-  torso.scale.set(S, 1, 0.7 * B); spine.add(torso);
+  torso.scale.set(S, 1, 0.8 * B); spine.add(torso);
   if (female) { // tank top: straps over bare shoulders
     for (const sx of [-1, 1]) { const strap = cap(0.014, 0.1, shirtPlain); strap.position.set(sx * 0.07 * S, 0.58, 0.02); strap.rotation.z = -sx * 0.3; spine.add(strap); }
   } else {
@@ -268,12 +270,12 @@ export function buildCharacter(look, team) {
   }
   const numTex = canvasTex(64, 64, (g, w, h) => { g.clearRect(0, 0, w, h); g.fillStyle = hex(T.trim); g.font = '800 40px Segoe UI, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String((A.id * 7 + 3 + team * 10) % 99), 32, 34); });
   const num = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.2), new THREE.MeshBasicMaterial({ map: numTex, transparent: true, depthWrite: false }));
-  num.position.set(0, 0.36, -0.136 * B); num.rotation.y = Math.PI; spine.add(num);
-  const neck = taper(0.05, 0.06, 0.13, skin, 14); neck.position.y = 0.68; spine.add(neck);
-  for (const sx of [-1, 1]) { const trap = ball(0.05, female ? skin : shirtPlain); trap.scale.set(1.5, 0.7, 1); trap.position.set(sx * 0.085 * S, 0.62, -0.01); trap.rotation.z = -sx * 0.5; spine.add(trap); } // trapezius slope
+  num.position.set(0, 0.36, -0.185 * B); num.rotation.y = Math.PI; spine.add(num);
+  const neck = taper(0.058, 0.068, 0.11, skin, 16); neck.position.y = 0.685; spine.add(neck);
+  for (const sx of [-1, 1]) { const trap = ball(0.06, female ? skin : shirtPlain); trap.scale.set(1.6, 0.7, 1.15); trap.position.set(sx * 0.095 * S, 0.62, -0.01); trap.rotation.z = -sx * 0.5; spine.add(trap); } // trapezius slope
 
   // head: face, ears, hair or cap
-  const head = new THREE.Group(); head.name = 'head'; head.position.y = 0.78; head.scale.setScalar(A.head * 1.07); spine.add(head);
+  const head = new THREE.Group(); head.name = 'head'; head.position.y = 0.78; head.scale.setScalar(A.head); spine.add(head);
   const skull = cast(new THREE.Mesh(new THREE.SphereGeometry(0.105, 26, 20), skin)); skull.scale.set(0.9, 1.06, 1); head.add(skull);
   const jaw = ball(female ? 0.064 : 0.072, skin); jaw.scale.set(1, 0.85, 0.95); jaw.position.set(0, -0.055, 0.03); head.add(jaw);
   const nose = ball(0.016, skin); nose.scale.set(0.9, 1.1, 1.2); nose.position.set(0, -0.008, 0.108); head.add(nose);
@@ -305,20 +307,21 @@ export function buildCharacter(look, team) {
 
   // arms: sleeves on tees, bare on tanks; wristbands on both wrists; hand with thumb
   const arm = (sx, racketHand) => {
-    const sh = new THREE.Group(); sh.position.set(sx * 0.215 * S, 0.53, 0); sh.rotation.order = 'YXZ'; spine.add(sh);
-    sh.add(ball(0.068 * Lm, female ? skin : shirtPlain)); // deltoid
-    const up = muscle(0.056 * Lm, 0.04 * Lm, 0.3, 0.3, 0.16, skin, 18, 1.0); sh.add(up);
+    const sh = new THREE.Group(); sh.position.set(sx * 0.225 * S, 0.53, 0); sh.rotation.order = 'YXZ'; spine.add(sh);
+    const delt = ball(0.082 * Lm, female ? skin : shirtPlain); delt.scale.set(1, 1.1, 1.02); sh.add(delt); // deltoid
+    const up = muscle(0.064 * Lm, 0.046 * Lm, 0.3, 0.32, 0.18, skin, 20, 1.04); sh.add(up);
     if (!female) {
-      const sleeve = taper(0.062 * Lm, 0.056 * Lm, 0.15, shirtPlain, 18); sleeve.position.y = -0.085; sh.add(sleeve);
-      const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.061 * Lm, 0.008, 5, 14), accent); cuff.rotation.x = Math.PI / 2; cuff.position.y = -0.165; sh.add(cuff);
+      const sleeve = taper(0.076 * Lm, 0.066 * Lm, 0.16, shirtPlain, 20); sleeve.position.y = -0.09; sleeve.scale.z = 1.04; sh.add(sleeve);
+      const cuff = new THREE.Mesh(new THREE.TorusGeometry(0.066 * Lm, 0.008, 5, 16), accent); cuff.rotation.x = Math.PI / 2; cuff.position.y = -0.17; sh.add(cuff);
     }
     const elbow = new THREE.Group(); elbow.position.y = -0.31; sh.add(elbow);
     elbow.add(ball(0.04 * Lm, skin));
-    const fa = muscle(0.044 * Lm, 0.029 * Lm, 0.29, 0.15, 0.14, skin, 18, 0.95); elbow.add(fa);
-    const wb = taper(0.034 * Lm, 0.034 * Lm, 0.045, racketHand ? accent : trim); wb.position.y = -0.285; elbow.add(wb);
+    const fa = muscle(0.052 * Lm, 0.034 * Lm, 0.29, 0.16, 0.16, skin, 20, 0.98); elbow.add(fa);
+    const wb = taper(0.039 * Lm, 0.039 * Lm, 0.05, racketHand ? accent : trim, 16); wb.position.y = -0.283; elbow.add(wb);
     const hand = new THREE.Group(); hand.position.y = -0.335; elbow.add(hand);
-    const palm = ball(0.04, skin); palm.scale.set(0.9, 1.2, 0.65); hand.add(palm);
-    const thumb = ball(0.014, skin); thumb.scale.set(1, 1.8, 1); thumb.position.set(-sx * 0.035, 0, 0.02); thumb.rotation.z = sx * 0.5; hand.add(thumb);
+    const palm = ball(0.048, skin); palm.scale.set(0.95, 1.25, 0.72); palm.position.y = -0.012; hand.add(palm);
+    const fingers = ball(0.04, skin); fingers.scale.set(1.05, 0.8, 0.8); fingers.position.set(0, -0.06, 0.012); hand.add(fingers);
+    const thumb = ball(0.014, skin); thumb.scale.set(1, 1.8, 1); thumb.position.set(-sx * 0.04, -0.01, 0.022); thumb.rotation.z = sx * 0.5; hand.add(thumb);
     return { sh, elbow, hand };
   };
   const armL = arm(1, false), armR = arm(-1, true); // the player's right hand is local -x

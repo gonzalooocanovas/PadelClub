@@ -173,3 +173,7 @@ Classes: IMPLEMENTED / AUTO-TESTED / MANUALLY VERIFIED (a person, or me in the r
 
 ## Characters: scanned models set aside (latest)
 - The owner judged the skinned scanned models to look like deformed monsters and asked to use them only as REFERENCE. The scanned path (client/js/skin.js, statue.js, client/models) stays in the repo but is OFF by default (Settings: Scanned player models, experimental). The default characters are the procedural ones again, reworked with the scans as reference: smooth muscle-shaped limbs (thighs, calves, biceps, forearms), deltoids and trapezius, a thicker neck, streamlined sneakers instead of boxes, snugger sleeves, a slightly bigger head and deeper navy/red kits. Looked at in stills and one match frame only.
+
+## Character anatomy rebuild (latest)
+- Diagnosed and fixed in : characters were 1.85-2.17 m tall with widths drawn for a 1.7 m person (scale), plus thin disconnected volumes. Heights now 1.67-1.93 m, fuller pelvis/thighs/calves/arms/chest, bigger hands and shoes. Measured before/after with tools/character-measure.js. Checked as stills in neutral, ready, forehand/backhand, smash, run, shuffle; deep defence and recovery not inspected separately. Legs are still 48 % of height (real ~52 %).
+- One full test run showed 183/184 once and 184/184 on two later runs; the failing test was not captured on the first run, so it is unidentified (suspected a statistical bot test).

@@ -3,10 +3,10 @@
 
 export const ARCHETYPES = [
   // height: overall scale · shoulder/build/limb: silhouette multipliers · kit: 'tee' (shirt + shorts) or 'tank' (top + skirt)
-  { id: 0, key: 'agile', name: 'Agile', blurb: 'Quick feet, light frame. Lives at the net.', height: 1.02, shoulder: 0.96, build: 0.92, limb: 0.94, head: 0.98, kit: 'tee', hair: 0, skin: 0 },
-  { id: 1, key: 'allrounder', name: 'All-rounder', blurb: 'Balanced and steady from every position.', height: 0.96, shoulder: 0.88, build: 0.9, limb: 0.9, head: 0.96, kit: 'tank', hair: 1, skin: 2 },
-  { id: 2, key: 'power', name: 'Power', blurb: 'Tall, strong overhead. Finishes points.', height: 1.08, shoulder: 1.14, build: 1.12, limb: 1.14, head: 1.02, kit: 'tee', hair: 5, skin: 1 },
-  { id: 3, key: 'defender', name: 'Defender', blurb: 'Compact and tireless. Gets every ball back.', height: 0.92, shoulder: 0.94, build: 1.0, limb: 0.98, head: 0.97, kit: 'tank', hair: 2, skin: 3 },
+  { id: 0, key: 'agile', name: 'Agile', blurb: 'Quick feet, light frame. Lives at the net.', height: 0.905, shoulder: 1.0, build: 0.98, limb: 0.99, head: 0.97, kit: 'tee', hair: 0, skin: 0 },
+  { id: 1, key: 'allrounder', name: 'All-rounder', blurb: 'Balanced and steady from every position.', height: 0.845, shoulder: 0.97, build: 0.99, limb: 0.97, head: 0.92, kit: 'tank', hair: 1, skin: 2 },
+  { id: 2, key: 'power', name: 'Power', blurb: 'Tall, strong overhead. Finishes points.', height: 0.965, shoulder: 1.14, build: 1.12, limb: 1.14, head: 0.98, kit: 'tee', hair: 5, skin: 1 },
+  { id: 3, key: 'defender', name: 'Defender', blurb: 'Compact and tireless. Gets every ball back.', height: 0.86, shoulder: 1.0, build: 1.06, limb: 1.02, head: 0.93, kit: 'tank', hair: 2, skin: 3 },
 ];
 
 export const HAIR_STYLES = ['Crop', 'Ponytail', 'Bun', 'Curls', 'Long', 'Cap', 'Buzz'];
