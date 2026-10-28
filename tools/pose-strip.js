@@ -14,16 +14,16 @@
   window.strip = (slot, kind, times, a = 0.9, fov = 22, run = 0) => {
     const pl = w.players[slot];
     for (const q of w.players) sc.remove(q.root);
-    sc.add(pl.root); r2.setSize(800, 260, false); r2.domElement.style.width = '800px'; r2.domElement.style.height = '260px'; r2.setScissorTest(true);
+    sc.add(pl.root); r2.setSize(800, 600, false); r2.domElement.style.width = '800px'; r2.domElement.style.height = '600px'; r2.setScissorTest(true);
     pl.startPose = null; pl.wasSwinging = false;
     for (let i = 0; i < 30; i++) V(slot, kind, -1);
     times.forEach((t, i) => {
       if (t < 0) V(slot, kind, -1, run ? { vz: run * (i + 1) / 4 } : {});
       else for (let k = 0; k <= Math.round(t / 0.016); k++) V(slot, kind, k * 0.016);
       pl.root.position.set(0, 0, 0); pl.root.rotation.y = pl.yaw; pl.root.updateMatrixWorld(true);
-      const cam = new w.camera.constructor(fov, 1, 0.1, 50), s = pl.team ? -1 : 1;
+      const cam = new w.camera.constructor(fov, (800 / times.length) / 600, 0.1, 50), s = pl.team ? -1 : 1;
       cam.position.set(Math.sin(a) * 5.2 * s, 1.1, Math.cos(a) * 5.2 * s); cam.lookAt(0, 0.9, 0);
-      const W = 800 / times.length; r2.setViewport(i * W, 0, W, 260); r2.setScissor(i * W, 0, W, 260); r2.render(sc, cam); pl.wasSwinging = false;
+      const W = 800 / times.length; r2.setViewport(i * W, 0, W, 600); r2.setScissor(i * W, 0, W, 600); r2.render(sc, cam); pl.wasSwinging = false;
     });
   };
 })();

@@ -2,7 +2,7 @@
 // moved as a whole (lean, twist, bob, crouch). The rig exposes the same fields as characters.js so scene.js animates it unchanged;
 // the jointed bones are empty placeholder groups and statueFollow() copies the useful part of the pose onto the model.
 import * as THREE from 'three';
-import { skinGeometry, buildBones, skinFollow } from './skin.js';
+import { skinGeometry, buildBones, skinFollow, JOINTS } from './skin.js';
 import { GLTFLoader } from '/vendor/three/examples/jsm/loaders/GLTFLoader.js';
 
 const FILES = { a: '/models/player_a.glb', b: '/models/player_b.glb' };
@@ -59,7 +59,7 @@ export function buildStatue(look, team, shadowBlob) {
   hips.add(spine); root.add(hips); B.elbow.add(racket); spine.add(A.sh, B.sh);
   return {
     root, blob, body, hips, spine, head, legL: legP(), legR: legP(), armL: A, armR: B, racket,
-    statue: true, skin: { bones, unit: 1 / k }, team, look, phase: Math.random() * 6, idlePh: Math.random() * 6, yaw: team === 0 ? 0 : Math.PI,
+    statue: true, skin: { bones, unit: 1 / k, keepArms: !!JOINTS[kind].keepArms }, team, look, phase: Math.random() * 6, idlePh: Math.random() * 6, yaw: team === 0 ? 0 : Math.PI,
     split: 0, lastY: 0, markMat: mark.material,
   };
 }

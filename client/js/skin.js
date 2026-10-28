@@ -1,7 +1,8 @@
-// Procedural skinning for the scanned player models. The models are single rigid meshes, so a skeleton is built in code from joint
-// positions measured on each model (JOINTS, in model units, y up, +z forward, +x the player's left) and every vertex is weighted to
-// the nearest bones. scene.js keeps animating a set of placeholder joints with its usual pose maths; skinFollow() converts the
-// difference between that pose and the ready stance into bone rotations, so the real mesh bends.
+// Procedural skinning for the scanned player models. The models are single rigid meshes captured in ONE pose each, so a skeleton is
+// built in code from joint positions measured on each model (JOINTS, in model units, y up, +z forward, +x the player's left), every
+// vertex is weighted to the nearest bones (then smoothed along the mesh), and the mesh is re-posed into the neutral ready stance the
+// animation starts from. scene.js keeps animating a set of placeholder joints with its usual pose maths; skinFollow() converts the
+// difference between that pose and the ready stance into bone rotations, so the model can take any pose the animation can.
 import * as THREE from 'three';
 
 const V = (a) => new THREE.Vector3(...a);
@@ -13,8 +14,11 @@ export const JOINTS = {
     shR: [-0.165, 0.72, -0.04], elR: [-0.195, 0.575, 0.03], wrR: [-0.145, 0.47, 0.08], racket: [-0.2, 0.52, 0.27],
     shL: [0.165, 0.72, -0.04], elL: [0.13, 0.6, 0.02], wrL: [0.04, 0.48, 0.1],
     hipR: [-0.1, 0.48, -0.22], knR: [-0.215, 0.31, -0.03], anR: [-0.335, 0.07, -0.12], toR: [-0.34, 0.02, 0.03],
-    hipL: [0.1, 0.48, -0.22], knL: [0.19, 0.33, -0.03], anL: [0.33, 0.07, -0.12], toL: [0.34, 0.02, 0.03],
-    torsoR: 0.17,
+    hipL: [0.1, 0.48, -0.22], knL: [0.19, 0.33, -0.03], anL: [0.33, 0.07, -0.12], toL: [0.34, 0.02, 0.03], upR: [0, 1, 0.1], upL: [0, 1, 0.1],
+    torsoR: 0.17, handL: [-0.1, 0.46, 0.1],
+    // her hands are joined on the racket handle in the scan and the mesh is one piece there, so re-posing the arms would tear the
+    // skin between them: her arms keep the scanned position and only move by a fraction of the animation
+    keepArms: true,
   },
   // model a: the man, caught mid-stride in a forehand lunge (right leg forward, left leg trailing and lifted).
   a: {
@@ -22,37 +26,46 @@ export const JOINTS = {
     shR: [-0.12, 0.62, 0.1], elR: [-0.15, 0.5, 0.2], wrR: [-0.14, 0.41, 0.36], racket: [-0.21, 0.36, 0.47],
     shL: [0.12, 0.64, 0.1], elL: [0.19, 0.6, -0.1], wrL: [0.24, 0.54, -0.06],
     hipR: [-0.04, 0.36, 0.08], knR: [-0.055, 0.28, 0.25], anR: [-0.04, 0.08, 0.35], toR: [-0.04, 0.03, 0.44],
-    hipL: [0.07, 0.36, 0.0], knL: [0.15, 0.25, -0.1], anL: [0.16, 0.22, -0.38], toL: [0.17, 0.17, -0.48],
-    torsoR: 0.15,
+    hipL: [0.07, 0.36, 0.0], knL: [0.15, 0.25, -0.1], anL: [0.16, 0.2, -0.38], toL: [0.17, 0.1, -0.46], upR: [0, 1, 0.15], upL: [0, 0.6, 0.8],
+    torsoR: 0.15, spread: 0.13,
   },
 };
 
-// bone name -> [parent, joint where the bone pivots]
+// bone name, parent, pivot joint. Three-part spine, neck, shoulder girdles, a left hand and per-leg chains.
 const TREE = [
   ['pelvis', null, 'pelvis'],
   ['spine', 'pelvis', 'spinePivot'],
-  ['head', 'spine', 'neck'],
-  ['shR', 'spine', 'shR'], ['elR', 'shR', 'elR'], ['rk', 'elR', 'wrR'],
-  ['shL', 'spine', 'shL'], ['elL', 'shL', 'elL'],
+  ['chest', 'spine', 'chestPivot'],
+  ['neck', 'chest', 'neck'],
+  ['head', 'neck', 'headPivot'],
+  ['clR', 'chest', 'clPivR'], ['shR', 'clR', 'shR'], ['elR', 'shR', 'elR'], ['rk', 'elR', 'wrR'],
+  ['clL', 'chest', 'clPivL'], ['shL', 'clL', 'shL'], ['elL', 'shL', 'elL'], ['haL', 'elL', 'wrL'],
   ['thR', 'pelvis', 'hipR'], ['knR', 'thR', 'knR'], ['ftR', 'knR', 'anR'],
   ['thL', 'pelvis', 'hipL'], ['knL', 'thL', 'knL'], ['ftL', 'knL', 'anL'],
 ];
 
 function points(J) {
   const p = {}; for (const k in J) if (Array.isArray(J[k])) p[k] = V(J[k]);
-  p.spinePivot = p.pelvis.clone().lerp(p.neck, 0.3);
+  for (const k of ['upR', 'upL']) p[k].normalize();
+  p.spinePivot = p.pelvis.clone().lerp(p.neck, 0.2);
+  p.chestPivot = p.pelvis.clone().lerp(p.neck, 0.55);
+  p.headPivot = p.neck.clone().lerp(p.headC, 0.5);
+  p.clPivR = p.neck.clone().lerp(p.shR, 0.3); p.clPivL = p.neck.clone().lerp(p.shL, 0.3);
+  if (!p.handL) p.handL = p.wrL.clone().addScaledVector(p.wrL.clone().sub(p.elL), 0.4);
   return p;
 }
 
 // capsules that claim vertices for each bone: [bone, from, to, radius]
 function capsules(J, p) {
-  const t = J.torsoR;
+  const t = J.torsoR, L = (a, b, f) => a.clone().lerp(b, f);
   return [
-    ['pelvis', p.pelvis, p.pelvis.clone().lerp(p.neck, 0.18), t * 0.95],
-    ['spine', p.pelvis.clone().lerp(p.neck, 0.3), p.neck.clone().lerp(p.pelvis, 0.05), t],
-    ['head', p.neck.clone().lerp(p.headC, 0.5), p.headTop, 0.11],
-    ['shR', p.shR, p.elR, 0.055], ['elR', p.elR, p.wrR, 0.048], ['rk', p.wrR, p.racket, 0.14],
-    ['shL', p.shL, p.elL, 0.055], ['elL', p.elL, p.wrL, 0.048],
+    ['pelvis', p.pelvis, L(p.pelvis, p.neck, 0.2), t * 0.95],
+    ['spine', L(p.pelvis, p.neck, 0.2), L(p.pelvis, p.neck, 0.55), t],
+    ['chest', L(p.pelvis, p.neck, 0.55), L(p.pelvis, p.neck, 0.95), t],
+    ['neck', p.neck, L(p.neck, p.headC, 0.5), 0.06],
+    ['head', L(p.neck, p.headC, 0.55), p.headTop, 0.11],
+    ['clR', p.clPivR, p.shR, 0.05], ['shR', p.shR, p.elR, 0.055], ['elR', p.elR, p.wrR, 0.048], ['rk', p.wrR, p.racket, 0.14],
+    ['clL', p.clPivL, p.shL, 0.05], ['shL', p.shL, p.elL, 0.055], ['elL', p.elL, p.wrL, 0.048], ['haL', p.wrL, p.handL, 0.05],
     ['thR', p.hipR, p.knR, 0.1], ['knR', p.knR, p.anR, 0.065], ['ftR', p.anR, p.toR, 0.06],
     ['thL', p.hipL, p.knL, 0.1], ['knL', p.knL, p.anL, 0.065], ['ftL', p.anL, p.toL, 0.06],
   ];
@@ -65,23 +78,56 @@ const seg = (p, a, b) => {
 
 const skinned = {}; // kind -> geometry carrying skinIndex / skinWeight
 
-/** Add bone weights to the geometry of a loaded model (once per kind). */
+/**
+ * Add bone weights to the geometry of a loaded model (once per kind): nearest-capsule weights, then smoothed along the mesh edges so
+ * the transitions are soft and isolated mistakes disappear. Vertices at the same position (texture seams) share their weights.
+ */
 export function skinGeometry(kind, geo) {
   if (skinned[kind]) return skinned[kind];
   const J = JOINTS[kind], p = points(J), caps = capsules(J, p);
-  const names = TREE.map((t) => t[0]), idx = Object.fromEntries(names.map((n, i) => [n, i]));
+  const names = TREE.map((t) => t[0]), B = names.length, idx = Object.fromEntries(names.map((n, i) => [n, i]));
   const pos = geo.attributes.position, n = pos.count;
-  const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
-  const v = new THREE.Vector3(), score = new Float32Array(names.length);
-  const K = 3.2;
+  const canon = new Int32Array(n), seen = new Map();
   for (let i = 0; i < n; i++) {
-    v.fromBufferAttribute(pos, i);
-    score.fill(Infinity);
+    const key = Math.round(pos.getX(i) * 2e4) + ',' + Math.round(pos.getY(i) * 2e4) + ',' + Math.round(pos.getZ(i) * 2e4);
+    const c = seen.get(key);
+    if (c === undefined) { seen.set(key, i); canon[i] = i; } else canon[i] = c;
+  }
+  let W = new Float32Array(n * B);
+  const v = new THREE.Vector3(), score = new Float32Array(B), K = 3.2;
+  for (let i = 0; i < n; i++) {
+    if (canon[i] !== i) continue;
+    v.fromBufferAttribute(pos, i); score.fill(Infinity);
     for (const [b, a, c, r] of caps) { const d = seg(v, a, c) / r; if (d < score[idx[b]]) score[idx[b]] = d; }
-    let min = Infinity; for (const s of score) if (s < min) min = s;
-    const order = names.map((_, j) => j).sort((x, y) => score[x] - score[y]).slice(0, 4);
-    let sum = 0; const w = order.map((j) => { const e = Math.exp(-K * (score[j] - min)); sum += e; return e; });
-    for (let k = 0; k < 4; k++) { si[i * 4 + k] = order[k]; sw[i * 4 + k] = w[k] / sum; }
+    let min = Infinity; for (const x of score) if (x < min) min = x;
+    let sum = 0; for (let j = 0; j < B; j++) { const e = Math.exp(-K * (score[j] - min)); W[i * B + j] = e; sum += e; }
+    for (let j = 0; j < B; j++) W[i * B + j] /= sum;
+  }
+  // mesh adjacency on the welded vertices
+  const adj = Array.from({ length: n }, () => new Set()), ix = geo.index, tri = (ix ? ix.count : n) / 3;
+  const vi = (k) => canon[ix ? ix.getX(k) : k];
+  for (let t = 0; t < tri; t++) {
+    const a = vi(t * 3), b = vi(t * 3 + 1), c = vi(t * 3 + 2);
+    adj[a].add(b).add(c); adj[b].add(a).add(c); adj[c].add(a).add(b);
+  }
+  for (let it = 0; it < 6; it++) {
+    const N = new Float32Array(n * B);
+    for (let i = 0; i < n; i++) {
+      if (canon[i] !== i) continue;
+      const nb = adj[i];
+      for (let j = 0; j < B; j++) {
+        if (!nb.size) { N[i * B + j] = W[i * B + j]; continue; }
+        let m = 0; for (const o of nb) m += W[o * B + j];
+        N[i * B + j] = 0.5 * W[i * B + j] + 0.5 * (m / nb.size);
+      }
+    }
+    W = N;
+  }
+  const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) {
+    const c = canon[i], order = Array.from({ length: B }, (_, j) => j).sort((x, y) => W[c * B + y] - W[c * B + x]).slice(0, 4);
+    let sum = 0; for (const j of order) sum += W[c * B + j];
+    for (let k = 0; k < 4; k++) { si[i * 4 + k] = order[k]; sw[i * 4 + k] = W[c * B + order[k]] / sum; }
   }
   const g = geo.clone();
   g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
@@ -89,26 +135,61 @@ export function skinGeometry(kind, geo) {
   return (skinned[kind] = g);
 }
 
-// Model a was captured mid-lunge. Its legs are put in a ready stance (feet flat on the floor) by two-bone IK once, and every later
-// pose is applied on top of that. target: where each ankle should be; pole: which way the knee points.
-const STANCE = { a: { R: { ankle: [-0.1, 0.07, 0.09], pole: [-0.1, 0.1, 1] }, L: { ankle: [0.12, 0.07, -0.08], pole: [0.1, 0.1, 1] } } };
-const qFT = (a, b) => new THREE.Quaternion().setFromUnitVectors(a.clone().normalize(), b.clone().normalize());
+const E = (x, y, z, o = 'XYZ') => new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z, o));
+// the ready stance in the same terms scene.js uses (see READY there): the placeholder joints rest at these rotations
+const REST_E = {
+  spine: [0.12, 0, 0], head: [0.008, 0, 0],
+  shR: [-0.7, -0.45, 0], elR: [-1.7, 0, 0], shL: [-0.5, 0.35, 0.12], elL: [-0.9, 0, 0],
+  thR: [-0.32, 0, -0.06], thL: [-0.32, 0, 0.06], knR: [0.64, 0, 0], knL: [0.64, 0, 0], ftR: [-0.288, 0, 0], ftL: [-0.288, 0, 0],
+};
+const REST = Object.fromEntries(Object.entries(REST_E).map(([k, v]) => [k, E(...v, k.startsWith('sh') ? 'YXZ' : 'XYZ')]));
+const REST_HIP_Y = 0.88 * Math.cos(0.32) + 0.1;
 
-function legBase(p, side, st) {
-  const hip = p['hip' + side], kn = p['kn' + side], an = p['an' + side], to = p['to' + side];
-  const T = V(st.ankle), pole = V(st.pole);
-  const l1 = hip.distanceTo(kn), l2 = kn.distanceTo(an);
-  const d = Math.min(Math.max(hip.distanceTo(T), Math.abs(l1 - l2) + 1e-3), l1 + l2 - 1e-3);
-  const dir = T.clone().sub(hip).normalize();
-  const cosA = (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
-  const perp = pole.clone().addScaledVector(dir, -pole.dot(dir)).normalize();
-  const knee = hip.clone().addScaledVector(dir, cosA * l1).addScaledVector(perp, sinA * l1);
-  const ankle = hip.clone().add(dir.clone().multiplyScalar(d));
-  const th = qFT(kn.clone().sub(hip), knee.clone().sub(hip));
-  const knW = qFT(an.clone().sub(kn), ankle.clone().sub(knee));
-  const ftW = qFT(to.clone().sub(an), new THREE.Vector3(0, -0.03, 1));
-  const inv = (q) => q.clone().invert();
-  return { th, kn: inv(th).multiply(knW), ft: inv(knW).multiply(inv(th)).multiply(ftW) };
+// Each model was scanned in ONE pose (a lunge, a crouch). To let it take any pose, the mesh is first re-posed into the ready stance
+// the animation maths starts from: every segment is rotated so that it points where the procedural rig's segment points.
+const DOWN = new THREE.Vector3(0, -1, 0), UP = new THREE.Vector3(0, 1, 0), FWD = new THREE.Vector3(0, -0.03, 1);
+const FLOOR_ANKLE_Y = 0.07;
+const dirOf = (...qs) => { const o = DOWN.clone(); for (let i = qs.length - 1; i >= 0; i--) o.applyQuaternion(qs[i]); return o; };
+
+// bone -> [from joint, to joint, target direction in the body's frame]
+function targets(spread = 0) {
+  const S = E(...REST_E.spine), lean = UP.clone().applyQuaternion(S);
+  const { shR, elR, shL, elL, knR, knL } = REST;
+  const thR = E(...REST_E.thR.slice(0, 2), REST_E.thR[2] - spread), thL = E(...REST_E.thL.slice(0, 2), REST_E.thL[2] + spread);
+  return {
+    spine: ['spinePivot', 'neck', lean], neck: ['neck', 'headTop', lean],
+    shR: ['shR', 'elR', dirOf(S, shR)], elR: ['elR', 'wrR', dirOf(S, shR, elR)],
+    shL: ['shL', 'elL', dirOf(S, shL)], elL: ['elL', 'wrL', dirOf(S, shL, elL)],
+    thR: ['hipR', 'knR', dirOf(thR)], knR: ['knR', 'anR', dirOf(thR, knR)], ftR: ['anR', 'toR', FWD.clone(), 'upR'],
+    thL: ['hipL', 'knL', dirOf(thL)], knL: ['knL', 'anL', dirOf(thL, knL)], ftL: ['anL', 'toL', FWD.clone(), 'upL'],
+  };
+}
+
+/** Rotation of every bone into the neutral stance, and the pelvis offset that puts both feet on the floor under the body. */
+function bakeBase(p, spread, keepArms) {
+  const T = targets(spread);
+  if (keepArms) for (const k of ['shR', 'elR', 'shL', 'elL']) delete T[k];
+  const Wd = {}, base = {}, ident = new THREE.Quaternion();
+  for (const [name, parent] of TREE) {
+    const Wp = parent ? Wd[parent] : ident, t = T[name];
+    if (!t) { Wd[name] = Wp.clone(); base[name] = ident.clone(); continue; }
+    const bind = p[t[1]].clone().sub(p[t[0]]).normalize();
+    const rot = new THREE.Quaternion().setFromUnitVectors(bind.applyQuaternion(Wp), t[2].clone().normalize());
+    if (t[3]) { // feet: also fix the roll so the sole faces the floor
+      const axis = t[2].clone().normalize(), tw = rot.clone().multiply(Wp);
+      const up = p[t[3]].clone().applyQuaternion(tw), want = UP.clone().addScaledVector(axis, -UP.dot(axis)).normalize();
+      up.addScaledVector(axis, -up.dot(axis)).normalize();
+      const ang = Math.atan2(axis.dot(up.clone().cross(want)), up.dot(want));
+      rot.premultiply(new THREE.Quaternion().setFromAxisAngle(axis, ang));
+    }
+    Wd[name] = rot.multiply(Wp);
+    base[name] = Wp.clone().invert().multiply(Wd[name]);
+  }
+  const ankle = (s) => p['hip' + s].clone()
+    .add(p['kn' + s].clone().sub(p['hip' + s]).applyQuaternion(Wd['th' + s]))
+    .add(p['an' + s].clone().sub(p['kn' + s]).applyQuaternion(Wd['kn' + s]));
+  const mid = ankle('R').add(ankle('L')).multiplyScalar(0.5);
+  return { base, offset: new THREE.Vector3(-mid.x, FLOOR_ANKLE_Y - mid.y, -mid.z) };
 }
 
 /** A fresh skeleton in the bind pose. Returns the bones by name plus the ordered array. */
@@ -122,48 +203,15 @@ export function buildBones(kind) {
     if (parent) bones[parent].add(b);
     bones[name] = b; list.push(b);
   }
-  const st = STANCE[kind];
-  if (st) for (const side of ['R', 'L']) {
-    const b = legBase(p, side, st[side]);
-    for (const [bn, q] of [['th' + side, b.th], ['kn' + side, b.kn], ['ft' + side, b.ft]]) { bones[bn].userData.base = q; }
-  }
+  const { base, offset } = bakeBase(p, J.spread || 0, J.keepArms);
+  for (const n in base) bones[n].userData.base = base[n];
+  bones.pelvis.userData.offset = offset;
   return { bones, list, root: bones.pelvis };
 }
 
-const E = (x, y, z, o = 'XYZ') => new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z, o));
-// the ready stance in the same terms scene.js uses (see READY there): the placeholder joints rest at these rotations
-const REST_E = {
-  spine: [0.12, 0, 0], head: [0.008, 0, 0],
-  shR: [-0.7, -0.45, 0], elR: [-1.7, 0, 0], shL: [-0.5, 0.35, 0.12], elL: [-0.9, 0, 0],
-  thR: [-0.32, 0, -0.06], thL: [-0.32, 0, 0.06], knR: [0.64, 0, 0], knL: [0.64, 0, 0], ftR: [-0.288, 0, 0], ftL: [-0.288, 0, 0],
-};
-const REST = Object.fromEntries(Object.entries(REST_E).map(([k, v]) => [k, E(...v, k.startsWith('sh') ? 'YXZ' : 'XYZ')]));
-const REST_HIP_Y = 0.88 * Math.cos(0.32) + 0.1;
-
 const q = new THREE.Quaternion(), r = new THREE.Quaternion();
-const delta = (cur, rest) => q.setFromEuler(cur.rotation).multiply(r.copy(rest).invert());
-
-/**
- * Copy the pose scene.js computed on the placeholder joints (pl.hips, pl.spine, ...) onto the bones.
- * `ratio` converts the procedural rig's metres into model units.
- */
-export function skinFollow(pl) {
-  const B = pl.skin.bones, k = pl.skin.unit;
-  const set = (bone, cur, rest) => { bone.quaternion.copy(delta(cur, rest)); if (bone.userData.base) bone.quaternion.multiply(bone.userData.base); };
-  set(B.spine, pl.spine, REST.spine);
-  set(B.head, pl.head, REST.head);
-  set(B.shR, pl.armR.sh, REST.shR); set(B.elR, pl.armR.elbow, REST.elR);
-  set(B.shL, pl.armL.sh, REST.shL); set(B.elL, pl.armL.elbow, REST.elL);
-  set(B.thR, pl.legR.thigh, REST.thR); set(B.knR, pl.legR.knee, REST.knR); set(B.ftR, pl.legR.foot, REST.ftR);
-  set(B.thL, pl.legL.thigh, REST.thL); set(B.knL, pl.legL.knee, REST.knL); set(B.ftL, pl.legL.foot, REST.ftL);
-  // the racket keeps its face square to the net whatever the arm does (orientRacket), so the wrist bone cancels the forearm
-  pl.root.updateMatrixWorld(true);
-  const want = rootRel(pl, pl.racket, new THREE.Quaternion()).multiply(pl.skin.restRacket.clone().invert());
-  B.rk.quaternion.copy(rootRel(pl, B.elR, new THREE.Quaternion()).invert().multiply(want));
-  // pelvis: lower with the crouch, turn and lean with the hips
-  B.pelvis.quaternion.setFromEuler(pl.hips.rotation);
-  B.pelvis.position.set(B.pelvis.userData.bind.x + pl.hips.position.x * k, B.pelvis.userData.bind.y + (pl.hips.position.y - REST_HIP_Y) * k, B.pelvis.userData.bind.z);
-}
+const delta = (cur, rest) => q.setFromEuler(cur.rotation).multiply(r.copy(rest).invert()).clone();
+const part = (d, f) => new THREE.Quaternion().slerp(d, f); // a fraction of a rotation
 
 const JOINT_OF = { spine: (pl) => pl.spine, head: (pl) => pl.head, shR: (pl) => pl.armR.sh, elR: (pl) => pl.armR.elbow, shL: (pl) => pl.armL.sh, elL: (pl) => pl.armL.elbow, thR: (pl) => pl.legR.thigh, knR: (pl) => pl.legR.knee, ftR: (pl) => pl.legR.foot, thL: (pl) => pl.legL.thigh, knL: (pl) => pl.legL.knee, ftL: (pl) => pl.legL.foot };
 const qa = new THREE.Quaternion(), qb = new THREE.Quaternion();
@@ -176,3 +224,31 @@ export function restPose(pl) {
   pl.root.updateMatrixWorld(true);
 }
 export function captureRest(pl) { pl.skin.restRacket = rootRel(pl, pl.racket, new THREE.Quaternion()); }
+
+/**
+ * Copy the pose scene.js computed on the placeholder joints (pl.hips, pl.spine, ...) onto the bones. The spine, neck and shoulder
+ * girdle share their rotation between several bones.
+ */
+export function skinFollow(pl) {
+  const B = pl.skin.bones, k = pl.skin.unit, damp = pl.skin.keepArms ? { R: 0.85, L: 0.45 } : { R: 1, L: 1 };
+  const put = (bone, d) => { bone.quaternion.copy(d).multiply(bone.userData.base); };
+  const dSpine = delta(pl.spine, REST.spine); put(B.spine, part(dSpine, 0.4)); put(B.chest, part(dSpine, 0.6));
+  const dHead = delta(pl.head, REST.head); put(B.neck, part(dHead, 0.4)); put(B.head, part(dHead, 0.6));
+  for (const S of ['R', 'L']) {
+    const arm = S === 'R' ? pl.armR : pl.armL, leg = S === 'R' ? pl.legR : pl.legL;
+    const dSh = part(delta(arm.sh, REST['sh' + S]), damp[S]), dCl = part(dSh, 0.25);
+    put(B['cl' + S], dCl);
+    put(B['sh' + S], dCl.clone().invert().multiply(dSh));
+    put(B['el' + S], part(delta(arm.elbow, REST['el' + S]), damp[S]));
+    put(B['th' + S], delta(leg.thigh, REST['th' + S])); put(B['kn' + S], delta(leg.knee, REST['kn' + S])); put(B['ft' + S], delta(leg.foot, REST['ft' + S]));
+  }
+  B.haL.quaternion.copy(B.haL.userData.base);
+  // the racket keeps its face square to the net whatever the arm does (orientRacket), so the wrist bone cancels the forearm
+  pl.root.updateMatrixWorld(true);
+  const want = rootRel(pl, pl.racket, new THREE.Quaternion()).multiply(pl.skin.restRacket.clone().invert());
+  B.rk.quaternion.copy(rootRel(pl, B.elR, new THREE.Quaternion()).invert().multiply(want));
+  // pelvis: lower with the crouch, turn and lean with the hips
+  const o = B.pelvis.userData.offset, bd = B.pelvis.userData.bind;
+  B.pelvis.quaternion.setFromEuler(pl.hips.rotation);
+  B.pelvis.position.set(bd.x + o.x + pl.hips.position.x * k, bd.y + o.y + (pl.hips.position.y - REST_HIP_Y) * k, bd.z + o.z);
+}
