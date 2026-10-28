@@ -2,6 +2,7 @@
 // moved as a whole (lean, twist, bob, crouch). The rig exposes the same fields as characters.js so scene.js animates it unchanged;
 // the jointed bones are empty placeholder groups and statueFollow() copies the useful part of the pose onto the model.
 import * as THREE from 'three';
+import { skinGeometry, buildBones, skinFollow } from './skin.js';
 import { GLTFLoader } from '/vendor/three/examples/jsm/loaders/GLTFLoader.js';
 
 const FILES = { a: '/models/player_a.glb', b: '/models/player_b.glb' };
@@ -26,14 +27,16 @@ const ring = { geo: null };
 
 export function buildStatue(look, team, shadowBlob) {
   const kind = statueKind(look);
-  const model = loaded[kind].clone(true);
-  model.traverse((o) => {
-    if (!o.isMesh) return;
-    o.castShadow = true;
-    o.material = o.material.clone();
-    o.material.roughness = 0.85; o.material.metalness = 0;
-  });
-  const box = new THREE.Box3().setFromObject(model);
+  let src; loaded[kind].traverse((o) => { if (o.isMesh && !src) src = o; });
+  const model = new THREE.Group();
+  const { bones, list, root: boneRoot } = buildBones(kind);
+  const mesh = new THREE.SkinnedMesh(skinGeometry(kind, src.geometry), src.material.clone());
+  mesh.material.roughness = 0.85; mesh.material.metalness = 0;
+  mesh.castShadow = true; mesh.frustumCulled = false;
+  model.add(boneRoot, mesh);
+  model.updateMatrixWorld(true);
+  mesh.bind(new THREE.Skeleton(list), new THREE.Matrix4());
+  const box = new THREE.Box3().setFromObject(src);
   const k = HEIGHT[kind] / (box.max.y - box.min.y);
   model.scale.setScalar(k);
   model.position.y = -box.min.y * k;
@@ -52,20 +55,14 @@ export function buildStatue(look, team, shadowBlob) {
   const A = arm(), B = arm();
   A.sh.add(A.elbow); B.sh.add(B.elbow);
   const hips = g(), spine = g(), head = g(), racket = g();
+  for (const j of [A.sh, A.elbow, B.sh, B.elbow]) j.rotation.order = 'YXZ';
   hips.add(spine); root.add(hips); B.elbow.add(racket); spine.add(A.sh, B.sh);
   return {
     root, blob, body, hips, spine, head, legL: legP(), legR: legP(), armL: A, armR: B, racket,
-    statue: true, team, look, phase: Math.random() * 6, idlePh: Math.random() * 6, yaw: team === 0 ? 0 : Math.PI,
+    statue: true, skin: { bones, unit: 1 / k }, team, look, phase: Math.random() * 6, idlePh: Math.random() * 6, yaw: team === 0 ? 0 : Math.PI,
     split: 0, lastY: 0, markMat: mark.material,
   };
 }
 
-/** Copy the pose that scene.js computed onto the rigid model. */
-export function statueFollow(pl) {
-  const b = pl.body;
-  const stand = 0.98; // hips height of the standing pose
-  const drop = Math.max(-0.12, Math.min(0.15, pl.hips.position.y - stand));
-  b.position.y = drop * 0.55;
-  b.position.x = pl.hips.position.x;
-  b.rotation.set(pl.hips.rotation.x + pl.spine.rotation.x * 0.7, pl.hips.rotation.y * 0.5 + pl.spine.rotation.y * 0.5, pl.hips.rotation.z);
-}
+/** Copy the pose that scene.js computed onto the skinned model. */
+export const statueFollow = skinFollow;

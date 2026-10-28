@@ -9,6 +9,7 @@ import { COURT } from '/shared/constants.js';
 import { DEFAULT_LOOKS } from '/shared/looks.js';
 import { buildCharacter, disposeCharacter, blobShadow } from './characters.js';
 import { loadStatues, statueReady, statueKind, buildStatue, statueFollow } from './statue.js';
+import { restPose, captureRest } from './skin.js';
 import { settings, onSetting } from './settings.js';
 import { buildEnvironment } from './envs.js';
 import { netHeight } from '/shared/physics.js';
@@ -414,6 +415,7 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
   makePlayer(team, look) {
     const rig = settings.scannedModels && statueReady(statueKind(look)) ? buildStatue(look, team, blobShadow()) : buildCharacter(look, team);
     rig.cur = READY.slice();
+    if (rig.statue) { restPose(rig); this.orientRacket(rig); captureRest(rig); }
     return rig;
   }
 
@@ -630,7 +632,8 @@ if (swinging) {
     pl.armR.elbow.rotation.set(-(P[6] + Math.sin(ph + Math.PI) * 0.15 * run * calm), 0, 0);
     pl.armL.sh.rotation.set(P[8] + counter, P[7], 0.12);
     pl.armL.elbow.rotation.set(-(P[9] + 0.55 * run * calm), 0, 0); // running arms bend
-    if (pl.statue) statueFollow(pl); else this.orientRacket(pl);
+    this.orientRacket(pl);
+    if (pl.statue) statueFollow(pl);
 
     // head tracks the ball
     const total = pl.yaw + P[0] + P[1];
