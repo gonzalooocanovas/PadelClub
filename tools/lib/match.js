@@ -28,6 +28,7 @@ export function playMatch({ a, b, seed = 1, games = 3, maxSeconds = 900, human =
     incoming: [0, 0], ignored: [0, 0], ignoredReachable: [0, 0], doubleCommit: [0, 0], overlapTicks: 0, splitTicks: 0, pairTicks: 0, bothNetTicks: 0, bothBackTicks: 0,
     positionErrorPoints: 0,
     // wall play
+    errByTac: {}, errByKind: {}, hitsByTac: {}, lastKind: '',
     wallReceived: [0, 0], wallRecoveryOk: [0, 0], tactics: {}, tacticOk: {}, wallFirstFaults: 0, hits: 0, illegal: 0, nan: 0,
   };
   // per incoming-ball episode bookkeeping
@@ -82,7 +83,8 @@ export function playMatch({ a, b, seed = 1, games = 3, maxSeconds = 900, human =
           if (e.tac) { S.tactics[e.tac] = (S.tactics[e.tac] || 0) + 1; }
           ep[team] = null;
         }
-        lastHit = { team, tac: e.tac || null, wallAnswered: e.wall || false };
+        lastHit = { team, tac: e.tac || null, wallAnswered: e.wall || false, kind: e.kind };
+        S.hitsByTac[e.tac || 'none'] = (S.hitsByTac[e.tac || 'none'] || 0) + 1;
         openEpisode(1 - team);
         rallyHits = g.rally.hits;
       }
@@ -92,7 +94,7 @@ export function playMatch({ a, b, seed = 1, games = 3, maxSeconds = 900, human =
         S.byReason[e.reason] = (S.byReason[e.reason] || 0) + 1;
         if (e.reason === 'bounce' && e.rally === 1) S.aces++;
         if (e.reason === 'double-fault') S.doubleFaults++;
-        if (['net', 'out', 'own-side'].includes(e.reason)) S.errors++;
+        if (['net', 'out', 'own-side'].includes(e.reason)) { S.errors++; if (lastHit) { const k = (lastHit.tac || 'none') + '/' + lastHit.kind; S.errByTac[k] = (S.errByTac[k] || 0) + 1; } }
         if (e.reason === 'bounce' || e.reason === 'out-after-bounce') S.winners++;
         if (e.por) S.por4++;
         // a point won by the hitter ('bounce'): the receiving team's episode is still open: did they have a chance?

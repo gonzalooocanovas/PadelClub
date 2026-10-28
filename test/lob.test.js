@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PadelGame } from '../shared/game.js';
-import { stepBall } from '../shared/physics.js';
+import { stepBall, solveLaunch } from '../shared/physics.js';
 
 function flight(q) {
   const g = new PadelGame({ rng: () => 0.5 });
@@ -30,24 +30,23 @@ test('a clean lob goes high and deep; a poor one is low and short (easy to smash
 
 import { botInput, makeBotMemory } from '../shared/ai.js';
 
-test('doubles: when a lob is coming the pair drops back (the one not chasing goes to the baseline) and keeps its width', () => {
-  const g = new PadelGame({ rng: () => 0.5 });
+test('doubles: when a real lob is coming the pair drops back: both end deep, side by side', () => {
+  const g = new PadelGame({ rng: () => 0.5, settings: { mode: 'doubles' } });
   const mem = [0, 1, 2, 3].map(makeBotMemory);
   g.phase = 'rally';
   g.rally = { serving: false, faults: 0, lastTeam: 1, lastSlot: 2, bounces: 0, hits: 4, netTouched: false, serveXSign: 1 };
   Object.assign(g.players[0], { x: -2, z: -3 }); Object.assign(g.players[1], { x: 2, z: -2.6 });
   Object.assign(g.players[2], { x: -1, z: 3.2 }); Object.assign(g.players[3], { x: 1.5, z: 3.0 });
-  // a high ball from the opponents, heading for team 0's side
-  Object.assign(g.ball, { x: 0, y: 3.5, z: 1, vx: 0, vy: 2, vz: -3 });
-  for (let i = 0; i < 70; i++) {
+  const b = { x: 0.5, y: 2.2, z: 3.5 };
+  Object.assign(g.ball, b, solveLaunch(b, 0.5, -8.6, 2.0), { hw: 5, fe: 0.85, ff: 0.86, sb: 0, ss: 0 });
+  for (let i = 0; i < 100 && g.phase === 'rally'; i++) {
     for (const k of [0, 1]) g.applyInput(k, botInput(g, k, mem[k], 'hard', 1 / 60));
     g.players[2].input = g.players[3].input = { mx: 0, mz: 0 };
-    g.tick(1 / 60);
-    g.ball.y = 3.5; g.ball.vy = 2; g.ball.z = 1; // hold the lob in the air for the test
+    g.tick(1 / 60); g.drainEvents();
   }
-  const [a, b] = [g.players[0], g.players[1]];
-  assert.ok(Math.min(a.z, b.z) < -6.5, `one drops to the baseline (${a.z.toFixed(1)}, ${b.z.toFixed(1)})`);
-  assert.ok(Math.abs(a.x - b.x) > 1.2, 'and the pair keeps its width');
+  const [a, c] = [g.players[0], g.players[1]];
+  assert.ok(Math.min(a.z, c.z) < -5.8 && Math.max(a.z, c.z) < -4.5, `both retreat (${a.z.toFixed(1)}, ${c.z.toFixed(1)})`);
+  assert.ok(Math.abs(a.x - c.x) > 1.0, 'and the pair keeps its width');
 });
 
 test('a ball reached at full stretch or hit with great pace gets a weaker reply', () => {

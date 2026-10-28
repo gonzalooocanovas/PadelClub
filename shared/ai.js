@@ -7,6 +7,7 @@
 import { clamp, COURT } from './constants.js';
 import { predictBall, serveBallHeight } from './physics.js';
 import { STYLE_MODS } from './roster.js';
+import { evaluateShot } from './tactics.js';
 
 export const BOT_LEVELS = ['easy', 'normal', 'hard', 'expert'];
 export const BOT_LABELS = { easy: 'Rookie', normal: 'Club', hard: 'Pro', expert: 'Legend' };
@@ -15,10 +16,10 @@ const SKILL = {
   // speed: top speed factor · react: seconds before reacting · noise: aim scatter · reach: swing distance
   // flub: chance to miss a ball outright · aggr: willingness to attack · lob/slice/smash: shot mix
   // serveSpin: chance of a spin serve · serveTiming: waits for the ideal bounce height · plan: replanning interval
-  easy: { speed: 0.9, sprint: true, react: 0.3, noise: 2.0, reach: 1.9, flub: 0.3, timingErr: 0.24, aggr: 0.12, lob: 0.35, slice: 0.08, smash: 0.35, serveSpin: 0, serveTiming: false, serveWindow: 0.45, servePace: 0.68, serveRisk: 0.0, plan: 0.12 },
-  normal: { speed: 0.96, sprint: true, react: 0.18, noise: 1.4, reach: 1.95, flub: 0.24, timingErr: 0.14, aggr: 0.3, lob: 0.45, slice: 0.18, smash: 0.5, serveSpin: 0.15, serveTiming: false, serveWindow: 0.25, servePace: 0.72, serveRisk: 0.3, plan: 0.1 },
-  hard: { speed: 0.95, sprint: true, react: 0.09, noise: 0.5, reach: 2.2, flub: 0.18, timingErr: 0.07, aggr: 0.5, lob: 0.5, slice: 0.25, smash: 0.7, serveSpin: 0.4, serveTiming: true, serveWindow: 0.12, servePace: 0.76, serveRisk: 0.6, plan: 0.07 },
-  expert: { speed: 1.1, sprint: true, react: 0.03, noise: 0.15, reach: 2.4, flub: 0.15, timingErr: 0.03, aggr: 0.45, lob: 0.55, slice: 0.3, smash: 0.85, serveSpin: 0.6, serveTiming: true, serveWindow: 0.05, servePace: 0.8, serveRisk: 0.85, plan: 0.05 },
+  easy: { speed: 0.9, sprint: true, react: 0.3, noise: 2.0, reach: 1.9, flub: 0.3, timingErr: 0.24, aggr: 0.12, lob: 0.35, slice: 0.08, smash: 0.35, serveSpin: 0, serveTiming: false, serveWindow: 0.45, servePace: 0.74, serveRisk: 0.0, plan: 0.12 },
+  normal: { speed: 0.96, sprint: true, react: 0.18, noise: 1.4, reach: 1.95, flub: 0.24, timingErr: 0.14, aggr: 0.3, lob: 0.45, slice: 0.18, smash: 0.5, serveSpin: 0.15, serveTiming: false, serveWindow: 0.25, servePace: 0.82, serveRisk: 0.3, plan: 0.1 },
+  hard: { speed: 0.95, sprint: true, react: 0.09, noise: 0.5, reach: 2.2, flub: 0.18, timingErr: 0.07, aggr: 0.5, lob: 0.5, slice: 0.25, smash: 0.7, serveSpin: 0.4, serveTiming: true, serveWindow: 0.12, servePace: 0.92, serveRisk: 0.6, plan: 0.07 },
+  expert: { speed: 1.1, sprint: true, react: 0.03, noise: 0.15, reach: 2.4, flub: 0.15, timingErr: 0.03, aggr: 0.45, lob: 0.55, slice: 0.3, smash: 0.85, serveSpin: 0.6, serveTiming: true, serveWindow: 0.05, servePace: 1.0, serveRisk: 0.85, plan: 0.05 },
 };
 
 const skillCache = new Map();
@@ -61,6 +62,55 @@ function moveTo(inp, p, tx, tz, skill, allowSprint) {
   return d;
 }
 
+/**
+ * The team's answer to the incoming ball, computed once per few ticks and shared by both partners (a deterministic function of the
+ * visible state: ball flight, positions, skills). Returns {plan, owner, ...}: the contact point to go to and the slot that owns it
+ * (-1 = nobody can do anything about it). Ownership rules, in order:
+ *  - only players who can actually get there in time compete (time to run there against the time the ball takes);
+ *  - the player on the ball's side gets a small advantage; the middle goes to whoever is nearer;
+ *  - a person (human partner) gets priority: the bot takes the ball only if the person cannot reach it, or the bot is clearly better placed;
+ *  - the owner keeps the ball unless the partner becomes clearly better placed (no flicker, no double commitment);
+ *  - if nobody can reach it, the nearest player still goes for it (the emergency fallback).
+ */
+function teamPlan(game, team, skill) {
+  const store = game._tp || (game._tp = [{ tick: -99 }, { tick: -99 }]);
+  const S = store[team];
+  const r = game.rally, b = game.ball;
+  const key = r.hits + ':' + r.lastTeam;
+  if (S.key !== key) { S.key = key; S.owner = -1; S.epStart = game.time; S.dare = game.rng(); S.plan = null; S.tick = -99; }
+  if (game.tickNo - S.tick < 3 && S.plan !== undefined) return S; // a tactical read refreshed every 50 ms
+  S.tick = game.tickNo;
+  const mates = [game.players[team * 2], game.players[team * 2 + 1]].filter((q) => q.active);
+  const speedOf = (q) => (q.human ? 1 : skill.speed);
+  const reactLeft = (q) => (q.human ? 0 : Math.max(0, skill.react - (game.time - S.epStart)));
+  const samples = predictBall(b, 3.0);
+  const need = (q, s) => Math.max(0, Math.hypot(s.x - q.x, s.z - q.z) - 0.6) / (speedOf(q) * 6.4);
+  let bounced = r.bounces >= 1, plan = null, first = null, reach = [];
+  for (const s of samples) {
+    if (s.floor) bounced = true;
+    const mine = team === 0 ? s.z < -0.4 : s.z > 0.4;
+    const overhead = mine && !bounced && s.vy < 0 && s.y < 2.45 && s.y > 1.95 && Math.abs(s.z) < 7 && S.dare < 0.25 + skill.smash * 0.75;
+    const ground = mine && s.y < 1.7 && s.vy <= (bounced ? 2.0 : 0.5) && (bounced || Math.abs(s.z) < 4.2); // after the bounce, also off the glass
+    if (!overhead && !ground) continue;
+    first = first || s;
+    const ok = mates.filter((q) => need(q, s) <= s.t - reactLeft(q));
+    if (ok.length) { plan = s; reach = ok; break; }
+  }
+  plan = plan || first;
+  S.plan = plan || null;
+  if (!plan) { S.owner = -1; return S; }
+  const pool = reach.length ? reach : mates; // emergency: nobody makes it, the nearest still tries
+  const mid = mates.length === 2 ? (mates[0].x + mates[1].x) / 2 : 0;
+  const cost = (q) => {
+    const sideBias = mates.length === 2 && (plan.x - mid) * (q.x < mates.find((m) => m !== q).x ? -1 : 1) > 0 ? -0.25 : 0; // ball-side player
+    return need(q, plan) + sideBias - (q.human ? 0.35 : 0) + (q.slot === S.owner ? -0.25 : 0); // priority to a person; keep the owner
+  };
+  let best = pool[0];
+  for (const q of pool) if (cost(q) < cost(best) - 1e-9 || (Math.abs(cost(q) - cost(best)) <= 1e-9 && q.slot < best.slot)) best = q;
+  S.owner = best.slot;
+  return S;
+}
+
 export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
   const skill = skillFor(difficulty);
   const p = game.players[slot];
@@ -94,39 +144,12 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
   }
 
   if (incoming) {
-    mem.planAge += dt;
-    if (mem.planAge > skill.plan) {
-      mem.planAge = 0;
-      const samples = predictBall(b, 3.0);
-      let pick = null;
-      let bounced = r.bounces >= 1;
-      let first = null; // earliest playable point, used when nothing is reachable in time
-      const canReach = (s) => Math.hypot(s.x - p.x, s.z - p.z) <= 0.6 + skill.speed * 6.4 * Math.max(0, s.t - mem.react);
-      for (const s of samples) {
-        if (s.floor) bounced = true;
-        const mine = p.team === 0 ? s.z < -0.4 : s.z > 0.4;
-        // overhead: a high ball falling in my half before it bounces is attacked (smash / bandeja) by players who dare
-        const overhead = mine && !bounced && s.vy < 0 && s.y < 2.45 && s.y > 1.95 && Math.abs(s.z) < 7 && rnd() < 0.25 + skill.smash * 0.75;
-        // groundstrokes after the bounce (also off the back wall); volleys only in the net zone
-        const ground = mine && s.y < 1.7 && s.vy <= (bounced ? 2.0 : 0.5) && (bounced || Math.abs(s.z) < 4.2);
-        if (!overhead && !ground) continue;
-        first = first || s;
-        if (canReach(s)) { pick = s; break; } // anticipation: go to the first point that can actually be reached, even after a wall rebound
-      }
-      pick = pick || first;
-      mem.plan = pick || null;
-    }
-    const partner = game.players[slot ^ 1];
-    const plan = mem.plan;
-    let responsible = true;
-    if (plan && partner.active) {
-      const me = Math.hypot(plan.x - p.x, plan.z - p.z);
-      const pa = Math.hypot(plan.x - partner.x, plan.z - partner.z);
-      // the player on the side of the ball takes it; the middle goes to the nearer one
-      const side = (plan.x - (p.x + partner.x) / 2) * (p.x < partner.x ? -1 : 1) > 0 ? -0.5 : 0.5;
-      const margin = partner.human ? 0.9 : 0.3; // with a person as partner: do not steal their balls
-      responsible = me + side < pa - margin || (!partner.human && Math.abs(me + side - pa) <= 0.3 && slot < partner.slot);
-    }
+    // Stages: (1) predict the ball, (2) find the contact points each player can really reach, (3) agree who takes it (one plan per
+    // team, so partners never disagree), (4) the others hold or recover their formation, (5) the owner chooses a shot.
+    const tp = teamPlan(game, p.team, skill);
+    const plan = tp.plan;
+    mem.plan = plan;
+    const responsible = tp.owner === slot || (tp.owner === -1 && !game.players[slot ^ 1].active);
     if (plan && responsible) {
       if (mem.react <= 0) moveTo(inp, p, plan.x, plan.z - os * (plan.y > 1.8 ? 0.3 : 0.75), skill, true);
     } else {
@@ -138,9 +161,19 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
     const onMySide = p.team === 0 ? b.z < 0.2 : b.z > -0.2;
     if (responsible && onMySide && !p.swing && p.cd <= 0 && !r.serving
         && dist < skill.reach && b.y < 2.9 && b.y > 0.1 && mem.react <= 0 && swingNow(b, dx, dz, dist, mem)) {
-      chooseShot(inp, game, p, os, skill);
+      // Tactical choice: every candidate shot is flown through the real physics (walls included) and scored (shared/tactics.js).
+      // chooseShot (the older rule-based picker) stays as the fallback when no candidate is valid.
+      const tact = evaluateShot(game, p, skill, rnd);
+      if (tact) {
+        inp.ax = tact.ax + (rnd() - 0.5) * skill.noise * 0.6; inp.az = tact.az; inp.mod = tact.mod; inp.lob = tact.lob; inp.tac = tact.tac;
+        mem.decision = { tac: tact.tac, reason: tact.reason, score: tact.score, tick: game.tickNo, ax: inp.ax, az: inp.az };
+      } else { chooseShot(inp, game, p, os, skill); inp.tac = 'fallback'; mem.decision = { tac: 'fallback', reason: 'no valid candidate', tick: game.tickNo }; }
       inp.swing = true;
-      inp.slip = !!mem.flub; // a mishit: the bot still goes for the ball (it used to just watch it go by) but strikes it badly
+      // A mishit is more likely when the ball is hard to play (pace, stretched, on the run, off the glass), not a coin flip: the bot
+      // still goes for the ball but strikes it badly (into the net, or long).
+      const spd = Math.hypot(b.vx, b.vy, b.vz);
+      const hardness = clamp((spd - 12) / 16, 0, 1) * 0.5 + (dist > 1.35 ? 0.35 : 0) + (Math.hypot(p.vx, p.vz) > 4.5 ? 0.15 : 0) + (r.wallTouched ? 0.1 : 0);
+      inp.slip = rnd() < skill.flub * 1.0 * (0.5 + 2 * Math.min(1, hardness));
     }
   } else {
     formation(inp, game, p, os, skill, mem);
@@ -280,7 +313,12 @@ function formation(inp, game, p, os, skill, mem) {
   const centre = clamp(b.x * (att ? 0.5 : 0.55), -1.7, 1.7);
   const half = att ? 1.2 : 1.55; // the net pair is tighter; defenders cover more ground
   const tx = clamp(centre + (lower ? -half : half), -3.9, 3.9);
-  const tz = -os * (att ? (skill.netZ ?? 3.4) - 0.5 : (skill.backZ ?? 7.6) - 0.4);
+  let depth = att ? (skill.netZ ?? 3.4) - 0.5 : (skill.backZ ?? 7.6) - 0.4;
+  // while the partner is out chasing the ball, move with them: the pair keeps one line (a partner pulled back by a lob is joined at
+  // the back, a partner stepping up for a short ball is joined at the net) instead of leaving a hole
+  const tp = game._tp?.[p.team];
+  if (tp && game.rally.lastTeam !== p.team && tp.owner === partner.slot && tp.plan) depth = clamp(depth * 0.35 + clamp(Math.abs(partner.z), 2.8, 7.6) * 0.65, 2.8, 7.6);
+  const tz = -os * depth;
   if (mem) mem.role = Math.abs(p.z) < Math.abs(partner.z) ? 'net' : 'back';
   moveTo(inp, p, tx, tz, skill, false);
 }

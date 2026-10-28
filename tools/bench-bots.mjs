@@ -60,6 +60,10 @@ for (const key of [...new Set(jobs.map((j) => j.pair))]) {
   out(`== ${key} ==`);
   if (!key.startsWith('self')) out(`   stronger (${key.split(':')[1]}) won ${hiWins}/${done.length} = ${pct(hiWins, done.length)}   95% CI [${(100 * lo).toFixed(0)}%, ${(100 * hi).toFixed(0)}%]   unfinished: ${S.length - done.length}`);
   out(`   points ${pts}   rally ${per(sum(S.map((x) => x.s.rallyShots)), pts)} shots   aces ${pct(sum(S.map((x) => x.s.aces)), pts)}   double faults ${pct(sum(S.map((x) => x.s.doubleFaults)), pts)}   errors ${pct(sum(S.map((x) => x.s.errors)), pts)}   winners ${pct(sum(S.map((x) => x.s.winners)), pts)}   por-4 ${pct(sum(S.map((x) => x.s.por4)), pts)}`);
+  const rs = {}; for (const x of S) for (const [k, v] of Object.entries(x.s.byReason)) rs[k] = (rs[k] || 0) + v;
+  out(`   points by reason: ${Object.entries(rs).sort((a, c) => c[1] - a[1]).map(([k, v]) => `${k} ${pct(v, pts)}`).join(', ')}`);
+  const et = {}; for (const x of S) for (const [k, v] of Object.entries(x.s.errByTac)) et[k] = (et[k] || 0) + v;
+  out(`   errors by last shot (tactic/kind): ${Object.entries(et).sort((a, c) => c[1] - a[1]).slice(0, 8).map(([k, v]) => `${k} ${v}`).join(', ')}`);
   const inc = sum(S.map((x) => sum(x.s.incoming)));
   const ign = sum(S.map((x) => sum(x.s.ignoredReachable)));
   const pairTicks = sum(S.map((x) => x.s.pairTicks)) || 1;
