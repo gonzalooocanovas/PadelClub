@@ -1,9 +1,0 @@
-PADEL CLUB bot benchmark   tag=phys-drag   matches per pairing=40   games per set=3   node v24.19.0   12th Gen Intel(R) Core(TM) i7-1255U, 12 threads   11 s
-Seeds: 1000..1039 (self-play 5000..). Side swapped on alternate seeds. Every match is deterministic for its seed.
-
-== normal:hard ==
-   stronger (hard) won 33/37 = 89.2%   95% CI [75%, 96%]   unfinished: 3
-   points 1111   rally 13.21 shots   aces 0.3%   double faults 0.0%   errors 92.3%   winners 7.7%   por-4 3.9%
-   teamwork: incoming balls 14691   clearly reachable ones the whole team ignored 10 (0.1%)   double commitments 0   overlap 0.2%   split one-up-one-back 20.1%   both net 28.1%   both back 36.3%   points lost to positioning 10
-   wall play: rebounds played 305 of 14691 shots (2.1%)   tactics chosen: none
-   invalid: NaN states 0   mean match length 462 s

@@ -1,0 +1,22 @@
+PADEL CLUB server benchmark: ramp   node v24.19.0   12th Gen Intel(R) Core(TM) i7-1255U x12   17 GB   win32 10.0.26200   2026-10-28T16:07:50.267Z
+Pure simulation: every room has 4 bots, all seats filled; each tick steps every room and serialises + broadcasts one snapshot per room (to a fake socket that only counts bytes). Budget per tick: 16.67 ms (60 Hz). 600 ticks (10 s of game time) per step of the ramp, after a 120-tick warm-up.
+
+rooms |  tick p50 ms |  p95 ms |  p99 ms |  max ms | over-budget ticks | snapshot bytes/room/tick | heap MB
+    1 |        0.01 |    0.17 |    0.83 |    4.41 |                 0 |                      236 |    12.9
+    2 |        0.02 |    0.33 |    0.80 |    2.26 |                 0 |                      256 |    12.3
+    4 |        0.02 |    0.22 |    0.39 |    0.63 |                 0 |                      250 |    11.6
+    8 |        0.19 |    0.58 |    0.90 |    1.11 |                 0 |                      250 |    12.4
+   16 |        0.25 |    0.92 |    1.51 |    6.38 |                 0 |                      191 |    15.3
+   32 |        0.54 |    1.72 |    2.33 |    2.98 |                 0 |                      191 |    16.6
+   48 |        1.02 |    2.16 |    2.80 |    5.32 |                 0 |                      259 |    29.5
+   64 |        1.32 |    2.69 |    3.26 |    3.92 |                 0 |                      189 |    28.4
+   96 |        1.87 |    4.14 |    5.10 |    6.25 |                 0 |                      251 |    39.0
+  128 |        2.45 |    5.10 |    6.13 |    7.60 |                 0 |                      191 |    12.9
+  192 |        3.52 |    7.62 |    8.49 |   11.28 |                 0 |                      237 |    59.2
+  256 |        5.12 |   10.52 |   11.93 |   13.77 |                 0 |                      191 |    64.7
+  320 |        6.06 |   12.22 |   13.88 |   14.74 |                 0 |                      191 |    70.1
+  384 |        7.60 |   16.30 |   18.76 |   24.04 |                25 |                      191 |    30.8
+  512 |       10.68 |   20.32 |   22.95 |   26.14 |               104 |                      255 |    94.9
+
+The simulation no longer holds the p95 < 16.67 ms target at 512 simultaneous rooms on this machine (one Node thread; room.step includes the snapshot broadcast to a counting socket).
+Not measured: the cost of real network sockets, TLS, other machines. Production capacity on Render is NOT established by this number.

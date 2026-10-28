@@ -1,0 +1,4 @@
+PADEL CLUB server benchmark: abuse   node v24.19.0   12th Gen Intel(R) Core(TM) i7-1255U x12   17 GB   win32 10.0.26200   2026-10-28T16:08:58.648Z
+4 clients sending valid inputs at 60 Hz plus, every 5 inputs: invalid JSON, wrong types, NaN/1e99 values and 200-input floods.
+server tick p95 0.50 ms, p99 0.83 ms, max 5.07 ms, over budget 0/900; uncaught errors 0; clients still connected: 4/4 (the rate limiter may disconnect flooders: that is correct).
+PASS: the server survived malformed and flooding input.

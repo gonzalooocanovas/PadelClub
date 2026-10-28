@@ -10,7 +10,8 @@
     "test": "node --test \"test/**/*.test.js\"",
     "calibrate": "node tools/calibrate.mjs --write",
     "bench:bots": "node tools/bench-bots.mjs",
-    "bench:server": "node tools/bench-server.mjs"
+    "bench:server": "node tools/bench-server.mjs",
+    "analyze:contact": "node tools/contact-analysis.mjs"
   },
   "engines": {
     "node": ">=20"

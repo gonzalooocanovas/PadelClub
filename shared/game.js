@@ -337,6 +337,7 @@ export class PadelGame {
     // short, an invitation to smash
     const lobQ = kind === 'lob' ? clamp(q, 0.3, 1) : 1;
     if (kind === 'lob') depth = clamp(depth - (1 - lobQ) * 5.0, 4.2, 9.3);
+    const aimed = [tx, os * depth]; // the intended landing point (before the scatter of a poor contact), reported to diagnostics
     let tz = os * depth;
     let err = (1 - q) * (kind === 'serve' ? 1.4 : 1.7);
     if (kind === 'serve') err *= 1 + 3 * Math.max(0, (this._servePace || 1) - 1); // all-out power costs accuracy
@@ -373,7 +374,7 @@ export class PadelGame {
       break;
     }
     if (slipNet) v = { ...v, vy: Math.min(v.vy, 0.8) - 1.0 }; // a real mishit: it dives into the net or the floor in front of the hitter
-    return { ...v, sb, ss };
+    return { ...v, sb, ss, tgt: aimed };
   }
 
   /**
@@ -508,7 +509,7 @@ export class PadelGame {
     if (kind === 'vibora') st.viboras++;
     this.stats.longestRally = Math.max(this.stats.longestRally, r.hits);
     const wallBall = !!r.wallTouched; r.wallTouched = false;
-    this.events.push({ e: 'hit', slot: p.slot, kind, tac: sw.tac || '', wall: wallBall, q: +q.toFixed(2), label, face: +face.toFixed(2), off: +e.toFixed(2), x: b.x, y: b.y, z: b.z, sb: v.sb, ss: v.ss });
+    this.events.push({ e: 'hit', slot: p.slot, kind, tac: sw.tac || '', wall: wallBall, tgt: v.tgt ? [+v.tgt[0].toFixed(2), +v.tgt[1].toFixed(2)] : null, q: +q.toFixed(2), label, face: +face.toFixed(2), off: +e.toFixed(2), x: b.x, y: b.y, z: b.z, sb: v.sb, ss: v.ss });
     return true;
   }
 

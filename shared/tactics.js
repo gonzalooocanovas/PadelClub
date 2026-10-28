@@ -26,7 +26,7 @@ const KINDS = {
 export function flyShot(ball, v, sb, ss = 0, maxT = 3.2) {
   const b = { ...ball, vx: v.vx, vy: v.vy, vz: v.vz, sb, ss };
   const side0 = Math.sign(b.z) || 1;
-  const out = { valid: false, reason: '', floor: null, samples: [], wallsAfter: 0, net: false, high: [], t: 0, netMargin: 9 };
+  const out = { valid: false, reason: '', floor: null, samples: [], pre: [], wallsAfter: 0, net: false, high: [], t: 0, netMargin: 9 };
   let t = 0, floors = 0;
   for (; t < maxT; t += DT_EVAL) {
     const ev = [];
@@ -49,6 +49,7 @@ export function flyShot(ball, v, sb, ss = 0, maxT = 3.2) {
       }
     }
     if (floors === 0 && Math.sign(b.z) !== side0 && b.y > 1.9 && b.y < 2.9 && b.vy < 0) out.high.push({ x: b.x, y: b.y, z: b.z, t }); // descending lob: a smash chance
+    if (floors === 0 && Math.sign(b.z) !== side0 && Math.abs(b.z) > 0.3 && b.y > 0.3 && b.y < 2.1) out.pre.push({ x: b.x, y: b.y, z: b.z, t }); // before the bounce: a volley chance for a player at the net
     if (floors >= 1) out.samples.push({ x: b.x, y: b.y, z: b.z, vy: b.vy, t });
   }
   out.valid = floors > 0;
@@ -74,6 +75,12 @@ function difficulty(flight, opps, react) {
       const need = Math.max(0, Math.hypot(s.x - o.x, s.z - o.z) - 1.4) / OPP_RUN + react;
       margin = s.t - need;
       break; // the first playable point after the bounce (walls included)
+    }
+    // a volley: an opponent at the net who can reach the ball before it bounces (the first reachable point of the flight)
+    for (const h of flight.pre) {
+      const need = Math.max(0, Math.hypot(h.x - o.x, h.z - o.z) - 1.4) / OPP_RUN + react * 0.6;
+      const m = h.t - need;
+      if (m >= -0.05) { margin = Math.max(margin, m + 0.35); break; }
     }
     // a smashable lob: an opponent who can get under the descending ball before it bounces
     for (const h of flight.high) {
@@ -125,8 +132,34 @@ export function evaluateShot(game, p, skill, rnd) {
   }
 
   const react = 0.12 + 0.2 * (1 - clamp(skill.speed, 0.8, 1.1)) + 0.12; // what we assume the opponents need to start moving
+
+  /** Score one flown candidate: how hard it is for the opponents, minus risk, plus the fit with this bot's style and situation. */
+  const scoreFlight = (c, f) => {
+    const diff = difficulty(f, opps, react);
+    const edge = Math.min(COURT.HALF_W - Math.abs(f.floor.x), COURT.HALF_L - Math.abs(f.floor.z), f.reason === 'out-after-bounce' ? 9 : 99);
+    // Real shots scatter: the worse the contact, the wider. Risk = chance the landing spot ends outside the lines (a normal
+    // distribution around the plan) plus the chance of not clearing the net.
+    const sigma = 0.5 + 0.7 * skill.noise + 1.0 * pressure;
+    const pOut = 0.5 * erfc(Math.max(0, edge) / (sigma * 1.414));
+    const netSigma = 0.14 + 0.14 * skill.noise + 0.25 * pressure;
+    const pNet = f.netMargin === 9 ? 0 : 0.5 * erfc(Math.max(0, f.netMargin) / (netSigma * 1.414));
+    const risk = pOut * 2.2 + pNet * 2.4;
+    let bonus = 0;
+    if (c.kind === 'lob') bonus += (skill.lob - 0.4) * 0.8 + (netOpp ? 0.1 : -0.35) + pressure * 0.45 + (Math.abs(p.z) > 7.5 ? 0.1 : 0);
+    if (c.kind === 'chiquita') bonus += (netOpp ? 0.25 : -0.1) + (skill.slice - 0.2) * 0.4;
+    if (c.kind === 'drop') bonus += (skill.aggr - 0.4) * 0.5;
+    if (c.kind === 'slice') bonus += (skill.slice - 0.2) * 0.8 + pressure * 0.15;
+    if (c.kind === 'smash') bonus += (skill.smash - 0.5) * 0.5 + 0.35;
+    if (c.label === 'smash-kill') bonus += (skill.smash - 0.6) * 1.2 - 0.3 + (f.reason === 'out-after-bounce' ? 1.1 : 0);
+    if (c.kind === 'bandeja') bonus += 0.2 + (1 - skill.aggr) * 0.3;
+    if (c.label === 'corner') bonus += f.wallsAfter >= 1 ? 0.05 : -0.3; // a corner shot is only worth it when the glass really does the work
+    if (c.kind === 'drive' && c.label !== 'corner') bonus += (skill.aggr - 0.3) * 0.4 + 0.1;
+    if (rebound && c.kind === 'lob') bonus += 0.25;
+    return { score: diff * 1.5 + bonus - risk * 1.5, why: `diff ${diff.toFixed(2)} risk ${risk.toFixed(2)} walls ${f.wallsAfter}` };
+  };
+
+  // Pass 1: a cheap ballistic estimate for every candidate.
   const table = [];
-  let best = null;
   for (const c of cands) {
     const K = KINDS[c.kind];
     const tx = c.x, tz = os * c.depth;
@@ -135,49 +168,45 @@ export function evaluateShot(game, p, skill, rnd) {
     const v = solveLaunch(b, tx, tz, T);
     const ss = c.kind === 'vibora' ? (Math.sign((tx - b.x) * os) || 1) * 12 : 0;
     const f = flyShot(b, v, K.sb, ss);
-    let score;
-    let why;
-    if (!f.valid || !f.floor) { score = -9; why = f.reason || 'no bounce'; }
-    else {
-      const diff = difficulty(f, opps, react);
-      const edge = Math.min(COURT.HALF_W - Math.abs(f.floor.x), COURT.HALF_L - Math.abs(f.floor.z), f.reason === 'out-after-bounce' ? 9 : 99);
-      // Real shots scatter: the worse the contact, the wider. Risk = chance the landing spot ends outside the lines (a normal
-      // distribution around the plan) plus the chance of not clearing the net.
-      const sigma = 0.45 + 0.6 * skill.noise + 0.8 * pressure;
-      const pOut = 0.5 * erfc(Math.max(0, edge) / (sigma * 1.414));
-      const netSigma = 0.12 + 0.12 * skill.noise + 0.2 * pressure;
-      const pNet = f.netMargin === 9 ? 0 : 0.5 * erfc(Math.max(0, f.netMargin) / (netSigma * 1.414));
-      const risk = (pOut * 2 + pNet * 2.2);
-      let bonus = 0;
-      if (c.kind === 'lob') bonus += (skill.lob - 0.4) * 0.8 + (netOpp ? 0.1 : -0.35) + pressure * 0.45 + (Math.abs(p.z) > 7.5 ? 0.1 : 0);
-      if (c.kind === 'chiquita') bonus += (netOpp ? 0.25 : -0.1) + (skill.slice - 0.2) * 0.4;
-      if (c.kind === 'drop') bonus += (skill.aggr - 0.4) * 0.5;
-      if (c.kind === 'slice') bonus += (skill.slice - 0.2) * 0.8 + pressure * 0.15;
-      if (c.kind === 'smash') bonus += (skill.smash - 0.5) * 0.5 + 0.35;
-      if (c.label === 'smash-kill') bonus += (skill.smash - 0.6) * 1.2 - 0.3 + (f.reason === 'out-after-bounce' ? 1.1 : 0);
-      if (c.kind === 'bandeja') bonus += 0.2 + (1 - skill.aggr) * 0.3;
-      if (c.label === 'corner') bonus += f.wallsAfter >= 1 ? 0.15 + 0.1 * Math.min(2, f.wallsAfter) : -0.2;
-      if (c.kind === 'drive') bonus += (skill.aggr - 0.3) * 0.4;
-      // the glass does the work: a rebound ball is best answered by an option that keeps the opponents away from the net / uses the wall
-      if (rebound && c.kind === 'lob') bonus += 0.25;
-      score = diff * 1.6 + bonus - risk * 1.4;
-      why = `diff ${diff.toFixed(2)} risk ${risk.toFixed(2)} walls ${f.wallsAfter}`;
-    }
-    const row = { ...c, score, why, f };
+    const row = { ...c, f, score: -9, why: f.reason || 'no bounce' };
+    if (f.valid && f.floor) Object.assign(row, scoreFlight(c, f));
     table.push(row);
-    if (!best || score > best.score) best = row;
   }
-  if (!best || best.score <= -9) return null;
+  const ranked = table.filter((r) => r.score > -9).sort((a, c) => c.score - a.score).slice(0, 6);
+
+  // Pass 2: the best few are planned by the REAL shot planner (the one that will execute the shot), flown through the real
+  // physics, and re-scored. Only options the planner can actually deliver survive: no more shots that look good on paper and
+  // end in the net.
+  const verified = [];
+  const savedRng = game.rng;
+  game.rng = () => 0.5; // evaluating must not consume the game's random stream
+  try {
+    const q = clamp(0.92 - 0.5 * pressure, 0.4, 0.95);
+    const inSpeed = Math.hypot(b.vx, b.vy, b.vz);
+    for (const c of ranked) {
+      const K = KINDS[c.kind];
+      const real = game.classify(p, { mod: K.mod, lob: K.lob });
+      const v = game.planShot(real, b, os, c.x, os * c.depth, q, inSpeed, null, { face: 0, e: 0.15, lateral: Math.hypot(p.vx, p.vz) * 0.5, forward: 0, spinMul: 1, powerMul: 1 });
+      const f2 = flyShot(b, v, v.sb, v.ss);
+      if (!f2.valid || !f2.floor) continue;
+      verified.push({ ...c, f: f2, ...scoreFlight(c, f2), real });
+    }
+  } finally { game.rng = savedRng; }
+  const pool = verified;
+  if (!pool.length) return null;
+  pool.sort((a, c) => c.score - a.score);
+  const best = pool[0];
+  if (best.score <= -9) return null;
   // players are not perfect: the weaker the bot, the more it can pick a near-best option instead of the best
   const slack = (0.55 - 0.4 * skill.aggr) * (1.3 - clamp(skill.speed, 0.8, 1.1) * 0.8) * 0.5;
-  const near = table.filter((r) => r.score > -9 && r.score >= best.score - slack);
+  const near = pool.filter((r) => r.score >= best.score - slack);
   const pick = near.length > 1 ? near[Math.floor(rnd() * near.length)] : best;
   const K = KINDS[pick.kind];
   let tac = pick.label === 'smash-kill' ? 'por4' : pick.label === 'corner' ? 'corner-wall' : pick.kind;
   if (rebound && pick.label !== 'corner' && pick.label !== 'smash-kill') tac = pick.kind === 'lob' || pick.kind === 'chiquita' || pick.kind === 'slice' ? 'recovery' : pick.kind === 'drive' || pick.kind === 'smash' ? 'bajada' : tac;
   return {
     ax: pick.x, az: os * pick.depth, mod: K.mod, lob: K.lob, tac, kind: pick.kind, label: pick.label,
-    reason: `${pick.label}${rebound ? ' (after a wall rebound)' : ''}: ${pick.why}`, score: pick.score, evaluated: table.length, table, rebound, pressure,
+    reason: `${pick.label}${rebound ? ' (after a wall rebound)' : ''}: ${pick.why} (verified with the real planner)`, score: pick.score, evaluated: table.length, table, verified: pool, rebound, pressure,
   };
 }
 

@@ -64,6 +64,8 @@ for (const key of [...new Set(jobs.map((j) => j.pair))]) {
   out(`   points by reason: ${Object.entries(rs).sort((a, c) => c[1] - a[1]).map(([k, v]) => `${k} ${pct(v, pts)}`).join(', ')}`);
   const et = {}; for (const x of S) for (const [k, v] of Object.entries(x.s.errByTac)) et[k] = (et[k] || 0) + v;
   out(`   errors by last shot (tactic/kind): ${Object.entries(et).sort((a, c) => c[1] - a[1]).slice(0, 8).map(([k, v]) => `${k} ${v}`).join(', ')}`);
+  const el = {}; for (const x of S) for (const [k, v] of Object.entries(x.s.errByLabel || {})) el[k] = (el[k] || 0) + v;
+  out(`   errors by contact label: ${Object.entries(el).sort((a, c) => c[1] - a[1]).map(([k, v]) => `${k} ${v}`).join(', ')}`);
   const inc = sum(S.map((x) => sum(x.s.incoming)));
   const ign = sum(S.map((x) => sum(x.s.ignoredReachable)));
   const pairTicks = sum(S.map((x) => x.s.pairTicks)) || 1;

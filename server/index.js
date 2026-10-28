@@ -1,6 +1,7 @@
 // HTTP static server + WebSocket game server.
 
 import { QuickQueue } from './quick.js';
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import http from 'node:http';
 import zlib from 'node:zlib';
 import fs from 'node:fs';
@@ -208,11 +209,29 @@ export function createGameServer({ port = 0, dataDir = process.env.DATA_DIR || p
   const STEP = 1 / SERVER_TICK;
   let last = performance.now();
   let acc = 0;
+  // Measured, not assumed: how long each 60 Hz simulation tick takes, how often the loop falls behind, and the event-loop delay.
+  const metrics = { tick: new Float64Array(36000), n: 0, over: 0, dropped: 0, started: performance.now(), loopDelay: monitorEventLoopDelay({ resolution: 5 }) };
+  metrics.loopDelay.enable();
+  metrics.reset = () => { metrics.n = 0; metrics.over = 0; metrics.dropped = 0; metrics.started = performance.now(); metrics.loopDelay.reset(); };
+  metrics.summary = () => {
+    const a = Array.from(metrics.tick.subarray(0, Math.min(metrics.n, metrics.tick.length))).sort((x, y) => x - y);
+    const q = (p) => (a.length ? a[Math.min(a.length - 1, Math.ceil((p / 100) * a.length) - 1)] : NaN);
+    return { ticks: metrics.n, p50: q(50), p95: q(95), p99: q(99), max: a.at(-1) ?? NaN, overBudget: metrics.over, droppedMs: metrics.dropped, eventLoopMs: { p50: metrics.loopDelay.percentile(50) / 1e6, p99: metrics.loopDelay.percentile(99) / 1e6, max: metrics.loopDelay.max / 1e6 } };
+  };
   const loop = setInterval(() => {
     const now = performance.now();
-    acc += Math.min(0.25, (now - last) / 1000);
+    const elapsed = (now - last) / 1000;
+    acc += Math.min(0.25, elapsed);
+    if (elapsed > 0.25) metrics.dropped += (elapsed - 0.25) * 1000; // the loop stalled longer than the catch-up cap: simulated time was lost
     last = now;
-    while (acc >= STEP) { rooms.step(STEP); acc -= STEP; }
+    while (acc >= STEP) {
+      const t0 = performance.now();
+      rooms.step(STEP);
+      const d = performance.now() - t0;
+      metrics.tick[metrics.n % metrics.tick.length] = d; metrics.n++;
+      if (d > 1000 / SERVER_TICK) metrics.over++;
+      acc -= STEP;
+    }
   }, 8);
   const sweeper = setInterval(() => rooms.sweep(), 30_000);
   // matchmaking and the live player count
@@ -237,9 +256,9 @@ export function createGameServer({ port = 0, dataDir = process.env.DATA_DIR || p
     server.listen(port, host, () => {
       const actual = server.address().port;
       resolve({
-        port: actual, rooms, store, server, wss,
+        port: actual, rooms, store, server, wss, metrics,
         async close() {
-          clearInterval(loop); clearInterval(sweeper); clearInterval(matchmaker); clearInterval(heartbeat);
+          clearInterval(loop); clearInterval(sweeper); clearInterval(matchmaker); clearInterval(heartbeat); metrics.loopDelay.disable();
           for (const ws of wss.clients) ws.terminate();
           store.flush();
           await new Promise((r) => wss.close(() => server.close(() => r())));

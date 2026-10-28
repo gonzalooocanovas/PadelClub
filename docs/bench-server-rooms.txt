@@ -1,0 +1,7 @@
+PADEL CLUB server benchmark: rooms   node v24.19.0   12th Gen Intel(R) Core(TM) i7-1255U x12   17 GB   win32 10.0.26200   2026-10-28T16:08:22.090Z
+8 room(s) x 4 real WebSocket clients (client and server share this machine and this CPU), 30 s, inputs at 60 Hz per client.
+server tick (all rooms + broadcast): p50 0.60 ms  p95 1.17 ms  p99 1.57 ms  max 5.26 ms   over 16.67 ms budget: 0 of 1800 ticks   dropped time 0 ms
+event-loop delay: p50 15.61 ms  p99 17.79 ms  max 19.20 ms
+snapshots received 64212 (66.9 per client per second), 15.4 MB total = 16.5 KB/s per client
+heap 13.5 -> 14.7 MB
+PASS: p95 tick under 16.67 ms.

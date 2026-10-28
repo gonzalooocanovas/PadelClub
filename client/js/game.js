@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { stepPlayer, serveLimit } from '/shared/physics.js';
 import { COURT, PLAYER, SHOT_IDS, clamp } from '/shared/constants.js';
+import { soundsFor } from './sound-map.js';
 import { settings } from './settings.js';
 import { scoreCallout } from './audio.js';
 
@@ -38,7 +39,8 @@ export function cameraConfig(s) {
 const QUICK = ['Nice shot!', 'Mine!', 'Yours!', 'Switch!'];
 
 export class MatchClient {
-  constructor({ net, world, hud, sound, start, onPause, onReplay, input }) {
+  constructor({ net, world, hud, sound, start, onPause, onReplay, onCorrection, input }) {
+    this.onCorrection = onCorrection || null;
     this.input = input;
     this.onReplay = onReplay; // (on) => void: lets the app freeze a solo match while a replay plays
     this.local = !!start.local && !start.drill; // no replays in training drills
@@ -200,7 +202,7 @@ export class MatchClient {
     this.replay = null;
     this.hud.banner('', '', 1);
     document.querySelector('.hud')?.classList.remove('replaying');
-    this.camPos = null; // the match camera takes over again from where it is
+    this.camPos = this.world.camera.position.clone(); // the match camera eases back from the replay camera instead of jumping
     this.onReplay?.(false);
   }
 
@@ -316,6 +318,7 @@ export class MatchClient {
     this.lastTeam = m.lt;
     const row = m.p[this.slot];
     const live = m.ph === 'serve' || m.ph === 'rally';
+    if (this.onCorrection && Math.hypot(this.me.x - row[0], this.me.z - row[1]) > 0.05) this.onCorrection(); // prediction vs server (diagnostics only)
     Object.assign(this.me, { x: row[0], z: row[1], vx: row[2], vz: row[3], stamina: row[4] });
     const ack = row[8];
     this.pending = live ? this.pending.filter((i) => i.seq > ack) : [];
@@ -331,7 +334,7 @@ export class MatchClient {
           this.hud.rally(0);
           this.serverSlot = e.slot;
           this.hud.setScore(e.score, this.names);
-          if (e.score.matchPoint) this.sound.play('matchpoint');
+          for (const s of soundsFor(e)) this.sound.play(s.name, s.opts);
           this.sound.announce(scoreCallout(e.score, e.score.server?.team));
           const mine = e.slot === this.slot;
           this.hud.banner(mine ? 'Your serve' : `${this.names[e.slot]} serves`, e.score.label || scoreCall(e.score), 2000);
@@ -339,9 +342,12 @@ export class MatchClient {
         }
         case 'hit': {
           later(() => {
-            this.sound.play('hit', { kind: e.kind, label: e.label, pan: e.x / 5, power: 0.75 + 0.25 * (e.q ?? 1) });
-            this.world.spawnFx('hit', e.x, e.y, e.z, e.kind === 'smash' ? 1.6 : 1);
-            this.world.punch(e.kind === 'smash' ? 2.4 : 0.9);
+            for (const s of soundsFor(e)) this.sound.play(s.name, s.opts);
+            // the impact itself shows the quality: a clean strike is a bright flash, a poor one a small dull red puff
+            const tint = { perfect: 0xffffff, clean: 0xf3ff7a, good: 0xf3ff7a, early: 0xffc857, late: 0xffc857, stretched: 0xffa13d, 'off-centre': 0xff9a6b, poor: 0xff6b5e }[e.label] || 0xf3ff7a;
+            const size = (e.kind === 'smash' ? 1.6 : 1) * (e.label === 'poor' ? 0.55 : e.label === 'perfect' ? 1.25 : 1);
+            this.world.spawnFx('hit', e.x, e.y, e.z, size, 'z', tint);
+            this.world.punch((e.kind === 'smash' ? 2.4 : 0.9) * (e.label === 'poor' ? 0.4 : 1));
           });
           // the other team split-steps just before the ball arrives
           for (let s = 0; s < 4; s++) {
@@ -357,13 +363,13 @@ export class MatchClient {
           if (e.k === 'door') { later(() => this.hud.banner('Out the door!', 'Chase it outside', 1400)); break; }
           const pw = clamp((e.s || 4) / 9, 0.3, 1.4);
           later(() => {
-            this.sound.play(e.k, { pan: e.x / 5, power: pw, mesh: e.k === 'wall' && (e.mesh ?? e.y > 3) });
+            for (const s of soundsFor(e)) this.sound.play(s.name, s.opts);
             this.world.spawnFx(e.k, e.x, e.y, e.z, pw, e.axis);
           });
           break;
         }
         case 'fault':
-          this.sound.play('fault');
+          for (const s of soundsFor(e)) this.sound.play(s.name, s.opts);
           this.hud.banner('Fault', e.n === 1 ? 'Second serve' : '', 1800);
           break;
         case 'point': {
@@ -382,11 +388,11 @@ export class MatchClient {
           if (top) {
             const word = { match: 'Game, set & match', set: 'Set', game: 'Game' }[top.type];
             this.hud.banner(word, `${team} · ${why} · rally of ${e.rally}`, 2400);
-            this.sound.play(top.type === 'match' ? 'match' : top.type === 'set' ? 'set' : 'game');
+            for (const s of soundsFor(e, { team: this.team })) this.sound.play(s.name, s.opts);
             this.sound.announce(top.type === 'match' ? 'Game, set and match' : top.type === 'set' ? 'Set' : 'Game');
           } else {
             this.hud.banner(why, `${e.winner === this.team ? 'Your team wins' : 'Opponents win'} the point · rally of ${e.rally} ${e.rally === 1 ? 'shot' : 'shots'}`, 2000);
-            this.sound.play(e.winner === this.team ? 'point' : 'lose');
+            for (const s of soundsFor(e, { team: this.team })) this.sound.play(s.name, s.opts);
           }
           break;
         }

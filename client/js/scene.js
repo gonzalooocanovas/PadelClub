@@ -737,7 +737,7 @@ if (swinging) {
     this.trailOn = true;
   }
 
-  spawnFx(kind, x, y, z, power = 1, axis = 'z') {
+  spawnFx(kind, x, y, z, power = 1, axis = 'z', tint = 0xf3ff7a) {
     const add = (mesh, life, update) => { this.scene.add(mesh); this.fx.push({ mesh, life, t: 0, update }); };
     if (kind === 'floor' || kind === 'wall') this.squash = { t: 0, amt: Math.min(1, power), axis: kind === 'floor' ? 'y' : axis };
     if (kind === 'floor') {
@@ -769,7 +769,7 @@ if (swinging) {
         add(m, 0.35, (f, u) => { f.mesh.position.x += vx * 0.016; f.mesh.position.y += vy * 0.016; f.mesh.material.opacity = 0.5 * (1 - u); });
       }
     } else if (kind === 'hit') {
-      const r = new THREE.Mesh(this.ringGeo, new THREE.MeshBasicMaterial({ color: 0xf3ff7a, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false }));
+      const r = new THREE.Mesh(this.ringGeo, new THREE.MeshBasicMaterial({ color: tint, transparent: true, opacity: 0.9, depthWrite: false, depthTest: false }));
       r.position.set(x, y, z);
       add(r, 0.22, (f, u) => { f.mesh.quaternion.copy(this.camera.quaternion); f.mesh.scale.setScalar((1 + u * 4) * power); f.mesh.material.opacity = 0.9 * (1 - u); });
     }

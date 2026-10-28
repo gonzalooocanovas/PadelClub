@@ -16,10 +16,10 @@ const SKILL = {
   // speed: top speed factor · react: seconds before reacting · noise: aim scatter · reach: swing distance
   // flub: chance to miss a ball outright · aggr: willingness to attack · lob/slice/smash: shot mix
   // serveSpin: chance of a spin serve · serveTiming: waits for the ideal bounce height · plan: replanning interval
-  easy: { speed: 0.9, sprint: true, react: 0.3, noise: 2.0, reach: 1.9, flub: 0.3, timingErr: 0.24, aggr: 0.12, lob: 0.35, slice: 0.08, smash: 0.35, serveSpin: 0, serveTiming: false, serveWindow: 0.45, servePace: 0.74, serveRisk: 0.0, plan: 0.12 },
-  normal: { speed: 0.96, sprint: true, react: 0.18, noise: 1.4, reach: 1.95, flub: 0.24, timingErr: 0.14, aggr: 0.3, lob: 0.45, slice: 0.18, smash: 0.5, serveSpin: 0.15, serveTiming: false, serveWindow: 0.25, servePace: 0.82, serveRisk: 0.3, plan: 0.1 },
-  hard: { speed: 0.95, sprint: true, react: 0.09, noise: 0.5, reach: 2.2, flub: 0.18, timingErr: 0.07, aggr: 0.5, lob: 0.5, slice: 0.25, smash: 0.7, serveSpin: 0.4, serveTiming: true, serveWindow: 0.12, servePace: 0.92, serveRisk: 0.6, plan: 0.07 },
-  expert: { speed: 1.1, sprint: true, react: 0.03, noise: 0.15, reach: 2.4, flub: 0.15, timingErr: 0.03, aggr: 0.45, lob: 0.55, slice: 0.3, smash: 0.85, serveSpin: 0.6, serveTiming: true, serveWindow: 0.05, servePace: 1.0, serveRisk: 0.85, plan: 0.05 },
+  easy: { speed: 0.9, sprint: true, react: 0.3, noise: 2.0, reach: 1.9, flub: 0.3, timingErr: 0.24, aggr: 0.12, lob: 0.35, slice: 0.08, smash: 0.35, serveSpin: 0, serveTiming: false, serveWindow: 0.45, servePace: 0.78, serveRisk: 0.0, plan: 0.12 },
+  normal: { speed: 0.96, sprint: true, react: 0.18, noise: 1.4, reach: 1.95, flub: 0.24, timingErr: 0.14, aggr: 0.3, lob: 0.45, slice: 0.18, smash: 0.5, serveSpin: 0.15, serveTiming: false, serveWindow: 0.25, servePace: 0.9, serveRisk: 0.3, plan: 0.1 },
+  hard: { speed: 0.95, sprint: true, react: 0.09, noise: 0.5, reach: 2.2, flub: 0.12, timingErr: 0.07, aggr: 0.5, lob: 0.5, slice: 0.25, smash: 0.7, serveSpin: 0.4, serveTiming: true, serveWindow: 0.12, servePace: 1.0, serveRisk: 0.6, plan: 0.07 },
+  expert: { speed: 1.1, sprint: true, react: 0.03, noise: 0.15, reach: 2.4, flub: 0.07, timingErr: 0.03, aggr: 0.45, lob: 0.55, slice: 0.3, smash: 0.85, serveSpin: 0.6, serveTiming: true, serveWindow: 0.05, servePace: 1.1, serveRisk: 0.85, plan: 0.05 },
 };
 
 const skillCache = new Map();
@@ -202,7 +202,8 @@ function outsideBall(inp, game, p, os, skill, mem) {
 function swingNow(b, dx, dz, dist, mem) {
   const closing = -(dx * b.vx + dz * b.vz) / (dist || 1);
   const ttc = Math.max(0, dist - 0.95) / Math.max(closing, 1.5);
-  return dist < 1.25 || ttc <= 0.17 + (mem.jit || 0);
+  if (closing < 1.5) return dist < 1.25; // a slow or stationary ball: swing when it is in range
+  return ttc <= 0.17 + (mem.jit || 0); // a moving ball: press so that it meets the racket 0.17 s into the swing (not when it is already on top of us)
 }
 
 /** Serve: stronger levels wait for the ball at waist height, aim for the corners and add spin. */

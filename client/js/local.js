@@ -48,6 +48,9 @@ export class LocalMatch {
     this.stop();
   }
 
+  /** Diagnostics only (solo): advance exactly one simulation tick while paused. */
+  stepOnce() { if (this.paused && !this.finished) { this.step(STEP); } }
+
   setPaused(p) { this.paused = p; this.lastT = performance.now(); }
 
   pushInputs(inputs) {

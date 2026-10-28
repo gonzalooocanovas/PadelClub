@@ -243,7 +243,7 @@ export class UI {
         const nice = { perfect: 'Perfect', clean: 'Clean', good: 'Good', early: 'Early', late: 'Late', 'off-centre': 'Off-centre', stretched: 'Stretched', poor: 'Poor contact', serve: 'Serve' }[label] || label;
         const shot = { lob: 'globo', vibora: 'víbora', chiquita: 'chiquita', drop: 'dejada', block: 'bloqueo', slice: 'slice', bandeja: 'bandeja', smash: 'remate', serve: 'saque' }[kind] || kind;
         f.textContent = `${nice} · ${shot}`;
-        f.className = `feedback show ${label === 'perfect' ? 'perfect' : label === 'good' || label === 'clean' || label === 'serve' ? 'good' : 'bad'}`;
+        f.className = `feedback show ${label === 'perfect' ? 'perfect' : label === 'good' || label === 'clean' || label === 'serve' ? 'good' : label === 'early' || label === 'late' || label === 'stretched' ? 'warn' : 'bad'}`;
         clearTimeout(this.ft);
         this.ft = setTimeout(() => f.classList.remove('show'), 900);
       },

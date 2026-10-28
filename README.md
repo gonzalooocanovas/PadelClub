@@ -7,11 +7,17 @@ browsers are thin clients that render with Three.js and send inputs.
 
 ```bash
 npm install
-npm start            # http://localhost:3000
-npm test             # 30 tests: scoring, rules, physics, and 4 real WebSocket clients
+npm start                 # http://localhost:3000
+npm test                  # the whole automated suite (see DEV_CHECKLIST.md for the current totals)
+npm run calibrate         # physics calibration report            -> docs/calibration-output.txt
+npm run bench:bots        # seeded bot benchmark (100 matches per pairing, parallel)   -> docs/bench-*.txt
+npm run analyze:contact   # 600 generated contact scenarios       -> docs/contact-analysis.txt
+npm run bench:server -- --scenario ramp|rooms|sustained|abuse   -> docs/bench-server-*.txt
 ```
 
-Requires Node 20+. No build step: the client is plain ES modules served by the same Node process.
+Developer diagnostics (read-only overlay): press **F3** in a match (**F2** for the small performance panel), see `docs/DIAGNOSTICS.md`.
+
+Requires Node 20+ (developed and tested on Node 24). No build step: the client is plain ES modules served by the same Node process.
 
 ## Play with three friends
 
@@ -45,18 +51,25 @@ Open **Settings → Controls → Configure** to pick a scheme (Classic keyboard,
 |---|---|
 | W A S D | Move (camera-relative; W = toward the net) |
 | Space | Hit / serve (press just before the ball reaches the ring around your feet) |
-| Arrow keys | Move (same as WASD). You are planted while swinging, and the direction you hold at contact is where the ball goes (left/right, up = deep, down = short); the mouse does not aim (left click hits, right click = globo) |
+| Arrow keys | Move (same as WASD). You are planted while swinging, and the direction you hold at contact is where the ball goes (left/right, up = deep, down = short). Optional mouse aim: press **M** (target ring follows the cursor, click hits, right click = globo) |
 | G / Enter | Globo (lob) |
 | R | Slice: backspin, skids low and slow |
 | Q | Chiquita (near net) / dejada (from deep) / **víbora** on overheads |
 | E | Block on low balls / **bandeja** on overheads |
 | X / Shift | Jump / sprint (stamina) |
-| Tab / Esc / 1–4 | Stats / menu / quick chat |
+| Tab / Esc / 1–4 | Stats / pause menu / quick chat |
+| C | Cycle the camera (player, first, wall, corner, side, broadcast, tactical) |
+| M | Mouse aim on/off |
+| Space (serve) | Hold to charge power, release to hit (a full charge often goes long) |
+| F2 / F3 / F4 | Performance panel / diagnostics overlay / copy a diagnostic report (developer tools, off by default) |
 
 Shot type is chosen from context (ball height, distance to the net, ball side, modifiers): forehand (topspin), backhand, slice, volley, globo, remate (smash), bandeja, víbora, chiquita, dejada, block, serve.
 
 ### Ball physics
-The ball has real spin: Magnus lift/dive (backspin floats, topspin dives), sidespin curves, air drag, and spin-dependent bounces. Backspin gives a low, slow bounce; topspin kicks forward; víbora sidespin kicks sideways off the glass. The shot solver simulates the real physics and corrects the launch, so the landing spot you aim at stays accurate whatever the spin. Mishit balls carry less spin.
+The ball has real spin: Magnus lift/dive (backspin floats, topspin dives), sidespin curves, quadratic air drag, spin-dependent bounces, two wall materials (lively glass, dead fence), swept floor contact and 4 integration sub-steps per game step. The shot solver simulates the same physics and corrects the launch, so the landing spot you aim at stays accurate. Which constants are standards, measurements, estimates or gameplay compromises is documented in `docs/CALIBRATION.md`.
+
+### Contact
+Contact is a **quality model, not a racket-face simulation**: timing, distance to the sweet spot, stretch, pace, running and fatigue decide the quality, which scales pace, accuracy, spin and depth. See `docs/CONTACT.md` for the model, the measured relationship and the known animation discrepancy.
 
 ## Architecture
 
@@ -88,23 +101,14 @@ client/
 
 ## What works / what does not (honest status)
 
-Working and covered by tests or verified in a browser:
-- Private rooms with codes and invite links, 4 seats, teams, host moves players, ready check, host-controlled format (1 or 3 sets, 2/4/6 games, golden point, AI level), chat + quick chat, rematch without a new room, reconnect.
-- Authoritative doubles match with real padel rules and scoring (see `test/`), serve box, faults/double faults, glass rebounds after the first bounce, net, out calls.
-- Practice mode vs bots; bots cover for disconnected players.
-- Guest profiles with level/XP/win-loss/history (file store); real stats (winners, errors, aces, smashes, volleys, longest rally) from match events.
-- Settings: graphics quality, volumes, camera distance/height, ball size, timing indicator, high contrast, fullscreen.
+The authoritative per-feature status (implemented / automatically tested / manually verified / partly verified / not implemented) is in `DEV_CHECKLIST.md`. In short:
 
-Not built yet (intentionally not faked):
-- Public matchmaking / Quick Play, ranked mode, ratings, leaderboards.
-- Friends list, presence, voice chat, emotes beyond quick chat, accounts (guests only).
-- True racket-face physics: spin is chosen per shot type (and scaled by contact quality), not computed from the racket angle.
-- Control remapping, gamepad, training drills (use Practice vs AI), beginner doubles hints, replay/tactical camera.
-- Only one environment (indoor club). Players are procedurally animated jointed figures (elbows, knees, torso twist, split-step, head tracking the ball), not imported skeletal models.
-- Persistence is a JSON file, not PostgreSQL (`server/store.js` is the only file to replace).
-- Not yet load-tested; the game loop is single-process, one Node process hosts all rooms.
+- Working and covered by automated tests: rules and scoring, the physics and its calibration, the shot solver, bots (tactics through the real physics, doubles teamwork, difficulty ordering, fairness), rooms with codes, quick match, online pause by agreement, reconnects, career v2 (three seasons played end to end by a test), drills, upgrades, match history, off-court play through the side doors (1,000 seeded edge-case trajectories), contact analysis, audio engine behaviour with a fake Web Audio, server benchmarks.
+- **Not verified by a person** (see `docs/MANUAL_TEST_CHECKLIST.md`): how the synthesised audio and music sound, all camera presets on all venues, gamepad on real hardware, a session with four humans, mobile and low-end GPUs.
+- Not built: accounts and cross-device history, ranked online play, real 3D models (everything is procedural), motion-captured animation, a racket-face contact simulation, online replays.
 
 ## Manual 4-player test checklist
+(The wider checklist for cameras, audio, off-court play and career is `docs/MANUAL_TEST_CHECKLIST.md`.)
 Use four browsers/devices (or three browser profiles plus one incognito window). Replace `HOST` with the host's address.
 1. Player 1: open `http://HOST:3000`, enter a name, **Play with friends**. Note the code.
 2. Players 2–4: open the invite link. Expect all four names in the lobby, the 5th person gets "Room is full".

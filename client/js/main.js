@@ -16,6 +16,7 @@ import {
 import { ROSTER_BY_ID } from '/shared/roster.js';
 import { hubHtml, eventHtml, eventResultHtml, drillResultHtml, upgradesHtml } from './career-ui.js';
 import { DrillController } from './drills.js';
+import { Diagnostics } from './diagnostics.js';
 import { entryFrom, addEntry, loadHistory, saveHistory, summarize } from '/shared/history.js';
 
 const net = new Net();
@@ -63,6 +64,26 @@ const val = (id) => document.getElementById(id)?.value ?? '';
 const myName = () => (val('nameInput').trim() || net.name || 'Guest').slice(0, 16);
 
 const ui = new UI(document.getElementById('ui'), { sound, act });
+
+// Developer diagnostics (read-only overlay, off by default: F3 or ?debug=1). It never writes game state or sends messages.
+const diag = new Diagnostics({
+  world,
+  getContext: () => ({
+    mode: local ? 'solo' : room ? `online ${room.settings?.mode || ''}` : 'menu', court: world.courtId, camera: settings.camera, quality: settings.quality,
+    ball: match?.ballView, me: match?.me, online: !local && !!match, solo: !!local, interpMs: match ? Math.round(match.interp * 1000) : null, rtt: net.rtt,
+    singles: room?.settings?.mode === 'singles',
+    bots: local ? [1, 2, 3].map((s) => ({ slot: s, level: typeof local.diffs[s] === 'object' ? local.diffs[s].level : local.diffs[s] || local.settings.difficulty, decision: local.mem[s]?.decision || null, owner: local.game._tp?.[s >> 1]?.owner ?? null })) : null,
+  }),
+});
+if (new URLSearchParams(location.search).get('debug') === '1') diag.toggle(true);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'F3') { e.preventDefault(); diag.toggle(undefined, false); }
+  else if (e.key === 'F2') { e.preventDefault(); diag.toggle(undefined, true); }
+  else if (diag.on && e.key === 'F4') { e.preventDefault(); diag.copyReport(); }
+  else if (diag.on && local && (e.key === '[' || e.key === ']')) { // stepping exists for solo matches only: online there is nothing to step
+    if (e.key === '[') local.setPaused(!local.paused); else local.stepOnce();
+  }
+});
 ui.getMouseAim = () => input.settings.mouseAim;
 
 // The pause menu is a hub: Settings, Controls and the rest open on top of it and closing them comes back to the pause menu
@@ -587,6 +608,7 @@ net.on('start', (m) => {
   match = new MatchClient({
     net: m.local ? localProxy : net, world, hud, sound, start: m, input,
     onReplay: (on) => local?.setPaused(on),
+    onCorrection: () => diag.onCorrection(),
     onPause: () => { if (ui.modal) closeModalOrBack(); else openPauseMenu(); },
   });
   screen = 'game';
@@ -594,8 +616,8 @@ net.on('start', (m) => {
   sound.startMusic('match');
 });
 
-net.on('snap', (m) => match?.onSnap(m));
-net.on('ev', (m) => match?.onEvents(m.ev));
+net.on('snap', (m) => { match?.onSnap(m); diag.onSnap(performance.now()); });
+net.on('ev', (m) => { match?.onEvents(m.ev); diag.onEvents(m.ev); });
 net.on('chat', (m) => ui.addChat(m));
 net.on('rematchVotes', (m) => {
   rematchVotes = m.ready;
@@ -655,6 +677,7 @@ function loop(now) {
   if (match && screen === 'game') match.frame(dt, now);
   else if (screen !== 'results' && !window.__freeze) idle(dt);
   world.render(dt);
+  diag.frame(now);
   requestAnimationFrame(loop);
 }
 
@@ -663,4 +686,4 @@ showHome();
 requestAnimationFrame(loop);
 
 // handy for debugging / automated checks
-window.__padel = { world, net, input, get local() { return local; }, get match() { return match; }, get room() { return room; } };
+window.__padel = { world, net, input, diag, get local() { return local; }, get match() { return match; }, get room() { return room; } };
