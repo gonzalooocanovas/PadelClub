@@ -31,7 +31,7 @@ export function buildStatue(look, team, shadowBlob) {
   const model = new THREE.Group();
   const { bones, list, root: boneRoot } = buildBones(kind);
   const mesh = new THREE.SkinnedMesh(skinGeometry(kind, src.geometry), src.material.clone());
-  mesh.material.roughness = 0.85; mesh.material.metalness = 0;
+  mesh.material.roughness = 0.85; mesh.material.metalness = 0; mesh.material.side = THREE.DoubleSide;
   mesh.castShadow = true; mesh.frustumCulled = false;
   model.add(boneRoot, mesh);
   model.updateMatrixWorld(true);

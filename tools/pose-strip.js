@@ -1,4 +1,5 @@
 // Pose filmstrip for the skinned player models. Start a practice match, paste this in the browser console, then e.g.
+// For the neutral (straight, arms down) pose first run  window.__skin = await import('/js/skin.js')  and use time -2.
 //     strip(1, 'forehand', [0.075, 0.17, 0.3, 0.42], 1.3)   // slot, shot kind, swing times (s; -1 = ready), camera angle (rad)
 // It moves the four athletes out of the game scene into a private one: reload the page afterwards.
 (() => {
@@ -18,7 +19,8 @@
     pl.startPose = null; pl.wasSwinging = false;
     for (let i = 0; i < 30; i++) V(slot, kind, -1);
     times.forEach((t, i) => {
-      if (t < 0) V(slot, kind, -1, run ? { vz: run * (i + 1) / 4 } : {});
+      if (t === -2) { window.__skin.restPose(pl); window.__skin.skinFollow(pl); }
+      else if (t < 0) V(slot, kind, -1, run ? { vz: run * (i + 1) / 4 } : {});
       else for (let k = 0; k <= Math.round(t / 0.016); k++) V(slot, kind, k * 0.016);
       pl.root.position.set(0, 0, 0); pl.root.rotation.y = pl.yaw; pl.root.updateMatrixWorld(true);
       const cam = new w.camera.constructor(fov, (800 / times.length) / 600, 0.1, 50), s = pl.team ? -1 : 1;

@@ -15,10 +15,10 @@ export const JOINTS = {
     shL: [0.165, 0.72, -0.04], elL: [0.13, 0.6, 0.02], wrL: [0.04, 0.48, 0.1],
     hipR: [-0.1, 0.48, -0.22], knR: [-0.215, 0.31, -0.03], anR: [-0.335, 0.07, -0.12], toR: [-0.34, 0.02, 0.03],
     hipL: [0.1, 0.48, -0.22], knL: [0.19, 0.33, -0.03], anL: [0.33, 0.07, -0.12], toL: [0.34, 0.02, 0.03], upR: [0, 1, 0.1], upL: [0, 1, 0.1],
-    torsoR: 0.17, handL: [-0.1, 0.46, 0.1],
-    // her hands are joined on the racket handle in the scan and the mesh is one piece there, so re-posing the arms would tear the
-    // skin between them: her arms keep the scanned position and only move by a fraction of the animation
-    keepArms: true,
+    torsoR: 0.17, handL: [-0.1, 0.46, 0.1], spread: 0.03,
+    // her hands touch the racket and her belly and the scan is one closed surface there: triangles that join her left hand to those
+    // parts are dropped (the hand is a closed shell on its own), otherwise they stretch into skin sheets when the arms move
+    cutHands: true,
   },
   // model a: the man, caught mid-stride in a forehand lunge (right leg forward, left leg trailing and lifted).
   a: {
@@ -27,7 +27,7 @@ export const JOINTS = {
     shL: [0.12, 0.64, 0.1], elL: [0.19, 0.6, -0.1], wrL: [0.24, 0.54, -0.06],
     hipR: [-0.04, 0.36, 0.08], knR: [-0.055, 0.28, 0.25], anR: [-0.04, 0.08, 0.35], toR: [-0.04, 0.03, 0.44],
     hipL: [0.07, 0.36, 0.0], knL: [0.15, 0.25, -0.1], anL: [0.16, 0.2, -0.38], toL: [0.17, 0.1, -0.46], upR: [0, 1, 0.15], upL: [0, 0.6, 0.8],
-    torsoR: 0.15, spread: 0.13,
+    torsoR: 0.15, spread: 0.04,
   },
 };
 
@@ -130,20 +130,30 @@ export function skinGeometry(kind, geo) {
     for (let k = 0; k < 4; k++) { si[i * 4 + k] = order[k]; sw[i * 4 + k] = W[c * B + order[k]] / sum; }
   }
   const g = geo.clone();
+  if (J.cutHands && ix) {
+    const dom = (k) => si[canon[ix.getX(k)] * 4], hand = new Set([idx.haL]), own = new Set([idx.haL, idx.elL, idx.shL]);
+    const keep = [];
+    for (let t = 0; t < tri; t++) {
+      const d = [dom(t * 3), dom(t * 3 + 1), dom(t * 3 + 2)];
+      if (d.some((x) => hand.has(x)) && d.some((x) => !own.has(x))) continue;
+      keep.push(ix.getX(t * 3), ix.getX(t * 3 + 1), ix.getX(t * 3 + 2));
+    }
+    g.setIndex(keep);
+  }
   g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
   g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
   return (skinned[kind] = g);
 }
 
 const E = (x, y, z, o = 'XYZ') => new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z, o));
-// the ready stance in the same terms scene.js uses (see READY there): the placeholder joints rest at these rotations
+// the neutral pose: standing straight, arms hanging, legs straight. Every pose scene.js computes (ready stance, swings, run) is a rotation away from it
 const REST_E = {
-  spine: [0.12, 0, 0], head: [0.008, 0, 0],
-  shR: [-0.7, -0.45, 0], elR: [-1.7, 0, 0], shL: [-0.5, 0.35, 0.12], elL: [-0.9, 0, 0],
-  thR: [-0.32, 0, -0.06], thL: [-0.32, 0, 0.06], knR: [0.64, 0, 0], knL: [0.64, 0, 0], ftR: [-0.288, 0, 0], ftL: [-0.288, 0, 0],
+  spine: [0, 0, 0], head: [0, 0, 0],
+  shR: [0, 0, 0], elR: [0, 0, 0], shL: [0, 0, 0], elL: [0, 0, 0],
+  thR: [0, 0, 0], thL: [0, 0, 0], knR: [0, 0, 0], knL: [0, 0, 0], ftR: [0, 0, 0], ftL: [0, 0, 0],
 };
 const REST = Object.fromEntries(Object.entries(REST_E).map(([k, v]) => [k, E(...v, k.startsWith('sh') ? 'YXZ' : 'XYZ')]));
-const REST_HIP_Y = 0.88 * Math.cos(0.32) + 0.1;
+const REST_HIP_Y = 0.98; // standing with straight legs
 
 // Each model was scanned in ONE pose (a lunge, a crouch). To let it take any pose, the mesh is first re-posed into the ready stance
 // the animation maths starts from: every segment is rotated so that it points where the procedural rig's segment points.
@@ -158,7 +168,7 @@ function targets(spread = 0) {
   const thR = E(...REST_E.thR.slice(0, 2), REST_E.thR[2] - spread), thL = E(...REST_E.thL.slice(0, 2), REST_E.thL[2] + spread);
   return {
     spine: ['spinePivot', 'neck', lean], neck: ['neck', 'headTop', lean],
-    shR: ['shR', 'elR', dirOf(S, shR)], elR: ['elR', 'wrR', dirOf(S, shR, elR)],
+    shR: ['shR', 'elR', dirOf(S, shR)], elR: ['elR', 'wrR', dirOf(S, shR, elR)], rk: ['wrR', 'racket', dirOf(S, shR, elR)],
     shL: ['shL', 'elL', dirOf(S, shL)], elL: ['elL', 'wrL', dirOf(S, shL, elL)],
     thR: ['hipR', 'knR', dirOf(thR)], knR: ['knR', 'anR', dirOf(thR, knR)], ftR: ['anR', 'toR', FWD.clone(), 'upR'],
     thL: ['hipL', 'knL', dirOf(thL)], knL: ['knL', 'anL', dirOf(thL, knL)], ftL: ['anL', 'toL', FWD.clone(), 'upL'],
@@ -189,7 +199,7 @@ function bakeBase(p, spread, keepArms) {
     .add(p['kn' + s].clone().sub(p['hip' + s]).applyQuaternion(Wd['th' + s]))
     .add(p['an' + s].clone().sub(p['kn' + s]).applyQuaternion(Wd['kn' + s]));
   const mid = ankle('R').add(ankle('L')).multiplyScalar(0.5);
-  return { base, offset: new THREE.Vector3(-mid.x, FLOOR_ANKLE_Y - mid.y, -mid.z) };
+  return { base, baseWorld: Wd.rk, offset: new THREE.Vector3(-mid.x, FLOOR_ANKLE_Y - mid.y, -mid.z) };
 }
 
 /** A fresh skeleton in the bind pose. Returns the bones by name plus the ordered array. */
@@ -203,9 +213,10 @@ export function buildBones(kind) {
     if (parent) bones[parent].add(b);
     bones[name] = b; list.push(b);
   }
-  const { base, offset } = bakeBase(p, J.spread || 0, J.keepArms);
+  const { base, offset, baseWorld } = bakeBase(p, J.spread || 0, J.keepArms);
   for (const n in base) bones[n].userData.base = base[n];
   bones.pelvis.userData.offset = offset;
+  bones.rk.userData.baseWorld = baseWorld;
   return { bones, list, root: bones.pelvis };
 }
 
@@ -246,7 +257,7 @@ export function skinFollow(pl) {
   // the racket keeps its face square to the net whatever the arm does (orientRacket), so the wrist bone cancels the forearm
   pl.root.updateMatrixWorld(true);
   const want = rootRel(pl, pl.racket, new THREE.Quaternion()).multiply(pl.skin.restRacket.clone().invert());
-  B.rk.quaternion.copy(rootRel(pl, B.elR, new THREE.Quaternion()).invert().multiply(want));
+  B.rk.quaternion.copy(rootRel(pl, B.elR, new THREE.Quaternion()).invert().multiply(want).multiply(B.rk.userData.baseWorld));
   // pelvis: lower with the crouch, turn and lean with the hips
   const o = B.pelvis.userData.offset, bd = B.pelvis.userData.bind;
   B.pelvis.quaternion.setFromEuler(pl.hips.rotation);
