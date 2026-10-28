@@ -66,3 +66,12 @@ test('"por 4": a clean short smash from the net bounces out of the court over th
   assert.equal(fly(0.95), true);
   assert.equal(fly(0.6), false);
 });
+
+test('a ball that has settled on the floor rolls and slows gently instead of stopping dead, without spamming bounce events', () => {
+  const b = { ...makeBall(), x: 0, y: 0.0335, z: 0, vx: 6, vy: 0, vz: 0 };
+  let events = 0, dist = 0;
+  for (let i = 0; i < 60; i++) { const ev = []; const x0 = b.x; stepBall(b, 1 / 60, ev); events += ev.filter((e) => e.type === 'floor').length; dist += b.x - x0; }
+  assert.equal(events, 0, 'rolling is not a bounce');
+  assert.ok(dist > 2.5, `rolled ${dist.toFixed(1)} m in a second`);
+  assert.ok(b.vx > 1 && b.vx < 6, 'slowing, not stopped');
+});

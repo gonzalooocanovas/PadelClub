@@ -125,3 +125,9 @@ Method: a simulation harness measured how bot pairs really move and why they los
 - ✅ Wall spin: topspin climbs the glass, backspin drops the ball dead, the wall strips part of the spin
 - ✅ Four new cameras (first, wall, corner, side) and C to cycle them. NOT visually verified yet
 - 🟡 Bots still react to wall rebounds rather than choosing wall plays on purpose
+
+## The ball (latest pass)
+- ✅ Model: felt texture with fibres, bump map and the curved seam of a real ball (512 px texture, 32x24 sphere)
+- ✅ Spin that follows the physics: topspin/backspin turn about the axis across its path (the right way round), sidespin about the vertical, rolling on the floor; speed streak (a tapered tail) on fast balls; squash on every impact (floor and walls); a scuff mark where it bounced; a darker, sharper shadow near the floor and a faint plumb line from the ball to its shadow when it is high (readable height from any camera)
+- ✅ Physics: a ball resting on the floor now rolls and slows gently (it used to be hit by the bounce friction every tick, stopping dead and emitting a bounce event each tick); tested
+- Seen in one browser screenshot only; not judged in real-time play

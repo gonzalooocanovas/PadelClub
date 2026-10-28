@@ -13,6 +13,7 @@ import { netHeight } from '/shared/physics.js';
 
 const TEAM_COLORS = [0xf2f5f8, 0x3d78c4]; // team A white, team B blue
 const ACCENT = 0xd4f23c;
+const clampSpin = (w) => Math.max(-70, Math.min(70, w)); // rad/s: faster than this just aliases on screen
 
 function canvasTex(w, h, draw, { repeat, aniso = 4 } = {}) {
   const c = document.createElement('canvas');
@@ -305,31 +306,61 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
   }
 
   buildBall() {
-    const tex = canvasTex(128, 64, (g, w, h) => {
-      g.fillStyle = '#d9f23a'; g.fillRect(0, 0, w, h);
-      g.fillStyle = 'rgba(80,100,0,.08)';
-      for (let i = 0; i < 300; i++) g.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5);
-      g.strokeStyle = '#f6ffd0'; g.lineWidth = 4;
-      g.beginPath(); g.arc(w * 0.25, h * 0.5, h * 0.42, -1.2, 1.2); g.stroke();
-      g.beginPath(); g.arc(w * 0.75, h * 0.5, h * 0.42, Math.PI - 1.2, Math.PI + 1.2); g.stroke();
+    // Felt-covered padel ball: fine fuzz (colour + bump) and the curved seam of a real ball
+    const W = 512, H = 256;
+    const tex = canvasTex(W, H, (g, w, h) => {
+      g.fillStyle = '#d6ee38'; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 9000; i++) { // felt fibres
+        g.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,170,.10)' : 'rgba(70,90,0,.10)';
+        g.fillRect(Math.random() * w, Math.random() * h, 1 + Math.random() * 1.5, 1 + Math.random() * 1.5);
+      }
+      g.strokeStyle = '#f8ffe0'; g.lineWidth = 7; g.lineCap = 'round';
+      for (const ox of [0, w / 2]) { // two interlocking curves make the continuous seam
+        g.beginPath();
+        g.moveTo(ox + w * 0.02, h * 0.18);
+        g.bezierCurveTo(ox + w * 0.18, h * 0.02, ox + w * 0.32, h * 0.45, ox + w * 0.25, h * 0.5);
+        g.bezierCurveTo(ox + w * 0.18, h * 0.55, ox + w * 0.32, h * 0.98, ox + w * 0.48, h * 0.82);
+        g.stroke();
+      }
+      g.fillStyle = 'rgba(40,60,0,.55)'; g.font = '700 30px Arial'; g.textAlign = 'center'; // a small printed mark
+      g.fillText('PADEL', w * 0.75, h * 0.52);
     });
-    this.ball = new THREE.Mesh(
-      new THREE.SphereGeometry(0.0335, 24, 18),
-      new THREE.MeshStandardMaterial({ map: tex, emissive: 0x4a5c00, emissiveIntensity: 0.55, roughness: 0.75 }),
+    const bump = canvasTex(256, 128, (g, w, h) => {
+      g.fillStyle = '#808080'; g.fillRect(0, 0, w, h);
+      for (let i = 0; i < 6000; i++) { const v = (Math.random() * 255) | 0; g.fillStyle = 'rgb(' + v + ',' + v + ',' + v + ')'; g.fillRect(Math.random() * w, Math.random() * h, 1, 1); }
+    });
+    this.ballMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.0335, 32, 24),
+      new THREE.MeshStandardMaterial({ map: tex, bumpMap: bump, bumpScale: 1.4, emissive: 0x3a4a00, emissiveIntensity: 0.4, roughness: 0.92 }),
     );
-    this.ball.castShadow = true;
+    this.ballMesh.castShadow = true;
+    this.ball = new THREE.Group(); // the group carries position and scale (and the squash on impact); the mesh inside spins
+    this.ball.add(this.ballMesh);
     this.scene.add(this.ball);
+    this.ballBase = 1;
+    this.squash = null;
     this.ballShadow = new THREE.Mesh(
-      new THREE.CircleGeometry(0.12, 20),
+      new THREE.CircleGeometry(0.12, 24),
       new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4, depthWrite: false }),
     );
     this.ballShadow.rotation.x = -Math.PI / 2;
     this.scene.add(this.ballShadow);
+    // a faint plumb line from the ball down to its shadow when it is high: it makes the height readable from any camera
+    const lg = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, -1, 0)]);
+    this.ballDrop = new THREE.Line(lg, new THREE.LineBasicMaterial({ color: 0xf3ff7a, transparent: true, opacity: 0.0, depthWrite: false }));
+    this.ballDrop.frustumCulled = false;
+    this.scene.add(this.ballDrop);
     this.ballHalo = new THREE.Mesh(
       new THREE.RingGeometry(0.1, 0.12, 24),
       new THREE.MeshBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.0, depthWrite: false, depthTest: false }),
     );
     this.scene.add(this.ballHalo);
+    // speed streak: a tapered tail along the flight path (stronger the faster the ball)
+    const tail = new THREE.ConeGeometry(0.03, 1, 10, 1, true);
+    tail.translate(0, 0.5, 0); // base at the ball, point trailing away along +y (rotated onto the reverse of the velocity)
+    this.streak = new THREE.Mesh(tail, new THREE.MeshBasicMaterial({ color: 0xeaff6a, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide }));
+    this.streak.visible = false;
+    this.scene.add(this.streak);
     // motion trail: fading ghosts of earlier positions
     this.trailPos = [];
     this.trail = [];
@@ -368,7 +399,7 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
     if (z) { this.zoneMesh.scale.set(z.x1 - z.x0, z.z1 - z.z0, 1); this.zoneMesh.position.set((z.x0 + z.x1) / 2, 0.025, (z.z0 + z.z1) / 2); }
   }
 
-  setBallScale(k) { this.ball.scale.setScalar(k); this.ballShadow.scale.setScalar(k * 0.7); this.ballHalo.scale.setScalar(k * 0.7); }
+  setBallScale(k) { this.ballBase = k; this.ball.scale.setScalar(k); this.ballShadow.scale.setScalar(k * 0.7); this.ballHalo.scale.setScalar(k * 0.7); }
 
   // ------------------------------------------------------------------ players
 
@@ -615,29 +646,73 @@ if (swinging) {
 
   setBall(x, y, z) {
     this.ball.position.set(x, y, z);
+    // the shadow is sharper and darker near the floor, softer and larger when the ball is high
+    const k = 1 + y * 0.18;
     this.ballShadow.position.set(x, 0.02, z);
-    const k = Math.max(0.35, 1 - y * 0.12);
-    this.ballShadow.scale.setScalar(k * this.ball.scale.x * 0.7);
+    this.ballShadow.scale.setScalar(k * this.ballBase * 0.7);
+    this.ballShadow.material.opacity = Math.max(0.12, 0.5 / (1 + 0.45 * y));
     this.ballHalo.position.set(x, y, z);
     this.ballHalo.quaternion.copy(this.camera.quaternion);
+    // plumb line
+    const pos = this.ballDrop.geometry.attributes.position;
+    pos.setXYZ(0, x, y, z); pos.setXYZ(1, x, 0.02, z); pos.needsUpdate = true;
+    this.ballDrop.material.opacity = y > 1.3 ? Math.min(0.28, (y - 1.3) * 0.1) : 0;
   }
 
-  /** Seam rotation from travel + spin, and the motion trail. sb = backspin(+)/topspin(-). */
-  animateBall(dt, speed, hx, hz, sb) {
-    if (speed > 0.5) {
-      const L = new THREE.Vector3(hz, 0, -hx).normalize();
-      this.ball.rotateOnWorldAxis(L, (speed * 0.55 - sb * 0.5) * dt);
+  /**
+   * The ball spins as it really spins: topspin/backspin about the axis across its path, sidespin about the vertical, and on the
+   * floor it rolls. sb = backspin(+)/topspin(-). Also the speed streak and the squash when it hits something.
+   */
+  animateBall(dt, speed, hx, hz, sb, ss = 0) {
+    const L = new THREE.Vector3(hz, 0, -hx);
+    if (L.lengthSq() < 1e-6) L.set(1, 0, 0);
+    L.normalize();
+    const onFloor = this.ball.position.y < 0.06;
+    const m = this.ballMesh;
+    if (onFloor && speed > 0.3) m.rotateOnWorldAxis(L, (speed / 0.0335) * dt * 0.6); // rolling: w = v / r (eased so it does not alias at 60 fps)
+    else {
+      m.rotateOnWorldAxis(L, clampSpin(-sb * 5) * dt); // topspin turns the top toward the direction of travel
+      if (ss) m.rotateOnWorldAxis(this.upAxis || (this.upAxis = new THREE.Vector3(0, 1, 0)), clampSpin(ss * 5) * dt);
+      if (!sb && !ss && speed > 0.5) m.rotateOnWorldAxis(L, 8 * dt); // a gentle default tumble so it never looks frozen
+    }
+    // squash on impact: flatten along the hit axis for a few frames, then spring back
+    const q = this.squash;
+    let sx = 1, sy = 1, sz = 1;
+    if (q) {
+      q.t += dt;
+      const u = q.t / 0.09;
+      if (u >= 1) this.squash = null;
+      else {
+        const e = Math.sin(Math.PI * u) * q.amt * 0.32;
+        if (q.axis === 'y') { sy = 1 - e; sx = sz = 1 + e * 0.5; }
+        else if (q.axis === 'x') { sx = 1 - e; sy = sz = 1 + e * 0.5; }
+        else { sz = 1 - e; sx = sy = 1 + e * 0.5; }
+      }
+    }
+    this.ball.scale.set(this.ballBase * sx, this.ballBase * sy, this.ballBase * sz);
+    // speed streak
+    const v = this.ballVel || { x: 0, y: 0, z: 0 };
+    const sp = Math.hypot(v.x, v.y, v.z);
+    const showStreak = this.trailOn && sp > 14;
+    this.streak.visible = showStreak;
+    if (showStreak) {
+      const dir = new THREE.Vector3(v.x, v.y, v.z).normalize().negate(); // the tail points backwards along the flight
+      this.streak.position.copy(this.ball.position);
+      this.streak.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      const len = Math.min(0.9, (sp - 14) * 0.03 + 0.12);
+      this.streak.scale.set(this.ballBase, len, this.ballBase);
+      this.streak.material.opacity = Math.min(0.32, (sp - 14) / 40);
     }
     const on = this.trailOn && speed > 9;
     this.trailPos.unshift(this.ball.position.clone());
     if (this.trailPos.length > 20) this.trailPos.pop();
-    this.trail.forEach((m, i) => {
+    this.trail.forEach((g, i) => {
       const p = this.trailPos[(i + 1) * 2 - 1];
-      m.visible = !!(on && p);
-      if (!m.visible) return;
-      m.position.copy(p);
-      m.scale.setScalar(this.ball.scale.x * (1 - i * 0.08));
-      m.material.opacity = Math.min(0.5, (speed - 9) / 20) * (1 - i / 9);
+      g.visible = !!(on && p);
+      if (!g.visible) return;
+      g.position.copy(p);
+      g.scale.setScalar(this.ballBase * (1 - i * 0.08));
+      g.material.opacity = Math.min(0.5, (speed - 9) / 20) * (1 - i / 9);
     });
   }
 
@@ -652,7 +727,12 @@ if (swinging) {
 
   spawnFx(kind, x, y, z, power = 1, axis = 'z') {
     const add = (mesh, life, update) => { this.scene.add(mesh); this.fx.push({ mesh, life, t: 0, update }); };
+    if (kind === 'floor' || kind === 'wall') this.squash = { t: 0, amt: Math.min(1, power), axis: kind === 'floor' ? 'y' : axis };
     if (kind === 'floor') {
+      // a scuff mark where the ball landed: it stays a moment so the bounce spot can be judged
+      const mark = new THREE.Mesh(new THREE.CircleGeometry(0.05 + 0.03 * power, 16), new THREE.MeshBasicMaterial({ color: 0x0b1a10, transparent: true, opacity: 0.45, depthWrite: false }));
+      mark.rotation.x = -Math.PI / 2; mark.position.set(x, 0.032, z);
+      add(mark, 1.4, (f, u) => { f.mesh.material.opacity = 0.45 * (1 - u); });
       const n = 3 + Math.round(power * 3);
       for (let i = 0; i < n; i++) {
         const m = new THREE.Mesh(this.puffGeo, new THREE.MeshBasicMaterial({ color: 0xcfe0d6, transparent: true, opacity: 0.45, depthWrite: false }));

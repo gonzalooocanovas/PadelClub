@@ -221,7 +221,13 @@ export function stepBall(b, dt, events) {
   }
 
   // floor
-  if (ny < BALL_R && b.vy < 0) {
+  if (ny < BALL_R && b.vy < 0 && -b.vy < 0.9) {
+    // resting on the floor: it rolls and slows gently (it used to be hit by the bounce friction every tick and stop dead)
+    ny = BALL_R; b.vy = 0;
+    const roll = Math.max(0, 1 - 0.9 * dt);
+    b.vx *= roll; b.vz *= roll;
+    b.sb = (b.sb || 0) * 0.9; b.ss = (b.ss || 0) * 0.9;
+  } else if (ny < BALL_R && b.vy < 0) {
     ny = BALL_R;
     events.push({ type: 'floor', x: nx, z: nz, speed: Math.abs(b.vy) });
     // backspin (sb>0) bites: lower bounce, ball slows. Topspin (sb<0) kicks up and forward.

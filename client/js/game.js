@@ -178,7 +178,7 @@ export class MatchClient {
     w.setBall(ball.x, ball.y, ball.z);
     w.ballVel = { x: a.ball.vx, y: a.ball.vy, z: a.ball.vz };
     const sp = Math.hypot(a.ball.vx, a.ball.vz);
-    w.animateBall(dt * 0.55, Math.hypot(sp, a.ball.vy), sp > 0.1 ? a.ball.vx / sp : 0, sp > 0.1 ? a.ball.vz / sp : 1, a.ball.sb);
+    w.animateBall(dt * 0.55, Math.hypot(sp, a.ball.vy), sp > 0.1 ? a.ball.vx / sp : 0, sp > 0.1 ? a.ball.vz / sp : 1, a.ball.sb, a.ball.ss);
     a.players.forEach((pa, k) => {
       const pb = b.players[k];
       w.updatePlayer(k, { ...pa, x: L(pa.x, pb.x), z: L(pa.z, pb.z), serving: false }, dt * 0.55, false);
@@ -416,7 +416,7 @@ export class MatchClient {
       x: lerp(a.b[0], b.b[0]) + b.b[3] * extra,
       y: Math.max(0.03, lerp(a.b[1], b.b[1]) + b.b[4] * extra - 4.9 * extra * extra),
       z: lerp(a.b[2], b.b[2]) + b.b[5] * extra,
-      vy: b.b[4], vx: b.b[3], vz: b.b[5], sb: b.b[6] || 0,
+      vy: b.b[4], vx: b.b[3], vz: b.b[5], sb: b.b[6] || 0, ss: b.b[7] || 0,
     };
     const players = b.p.map((rb, k) => {
       const ra = a.p[k];
@@ -458,7 +458,7 @@ export class MatchClient {
       w.setBall(view.ball.x, view.ball.y, view.ball.z);
       w.ballVel = { x: view.ball.vx, y: view.ball.vy, z: view.ball.vz };
       const sp = Math.hypot(view.ball.vx, view.ball.vz);
-      w.animateBall(dt, Math.hypot(sp, view.ball.vy), sp > 0.1 ? view.ball.vx / sp : 0, sp > 0.1 ? view.ball.vz / sp : 1, view.ball.sb);
+      w.animateBall(dt, Math.hypot(sp, view.ball.vy), sp > 0.1 ? view.ball.vx / sp : 0, sp > 0.1 ? view.ball.vz / sp : 1, view.ball.sb, view.ball.ss);
       view.players.forEach((v, k) => {
         v.serving = this.phase === 'serve' && k === this.serverSlot;
         if (k === this.slot) {
