@@ -125,7 +125,7 @@ export class PadelGame {
       mod: inp.mod === 1 || inp.mod === 2 || inp.mod === 3 ? inp.mod : 0, lob: !!inp.lob,
       keep: !!inp.keep, // bots decide their target when they start the swing and keep it until contact
     };
-    if (inp.swing) p.wantSwing = { ax: p.input.ax, az: p.input.az, mod: p.input.mod, lob: p.input.lob, pace: clamp(+inp.pace || 1, 0.6, 1.15) };
+    if (inp.swing) p.wantSwing = { ax: p.input.ax, az: p.input.az, mod: p.input.mod, lob: p.input.lob, pace: clamp(+inp.pace || 1, 0.6, 1.15), slip: !!inp.slip };
     if (inp.jump) p.wantJump = true;
   }
 
@@ -275,7 +275,7 @@ export class PadelGame {
 
   startSwing(p, sw) {
     if (this.phase === 'serve' && p.slot !== this.serverSlot) return;
-    p.swing = { t: 0, done: false, ax: sw.ax, az: sw.az, mod: sw.mod, lob: sw.lob, pace: sw.pace || 1 };
+    p.swing = { t: 0, done: false, ax: sw.ax, az: sw.az, mod: sw.mod, lob: sw.lob, pace: sw.pace || 1, slip: !!sw.slip };
     p.kind = SHOT_IDS.indexOf(this.phase === 'serve' ? 'serve' : this.classify(p, sw));
   }
 
@@ -344,11 +344,15 @@ export class PadelGame {
     if (ctx && kind !== 'lob' && kind !== 'serve') T *= 1 + 0.16 * ctx.face; // open face = higher, slower arc
     T = Math.max(T, 0.28);
     const spin = { sb, ss };
+    // a mishit (bots only) ends in the net or long: 60% / 40%
+    const slipNet = !!ctx?.slip && this.rng() < 0.6;
+    if (ctx?.slip && !slipNet) tz = os * 11.2; // long: it hits the back wall before it bounces
+    if (slipNet) T *= 0.74; // flat and low: into the net
     let aimX2 = tx, aimZ2 = tz;
     let v = solveLaunch(b, aimX2, aimZ2, T);
     // well-struck balls clear the net (poor contact does not get that help); then correct the launch so spin and drag
     // still land the ball on the aimed spot. Both are checked together: fixing one must not undo the other.
-    const needClear = kind !== 'lob' && (!ctx || ctx.face > -0.6);
+    const needClear = kind !== 'lob' && (!ctx || ctx.face > -0.6) && !slipNet;
     let corrections = 0;
     for (let it = 0; it < 24; it++) {
       v = solveLaunch(b, aimX2, aimZ2, T);
@@ -362,6 +366,7 @@ export class PadelGame {
       }
       break;
     }
+    if (slipNet) v = { ...v, vy: Math.min(v.vy, 0.8) - 1.0 }; // a real mishit: it dives into the net or the floor in front of the hitter
     return { ...v, sb, ss };
   }
 
@@ -455,7 +460,7 @@ export class PadelGame {
     const rush = clamp((inSpeed0 - 14) / 14, 0, 1);
     const onRun = clamp((Math.hypot(p.vx, p.vz) - 4) / 3, 0, 1);
     const pressure = 0.3 * stretch + 0.22 * rush + 0.08 * onRun;
-    q = clamp(q - pressure, 0.3, 1);
+    q = clamp(q - pressure - (sw.slip ? 0.4 : 0), 0.3, 1); // slip: a bot mishit
     if (p.slot === 0 && this.mods) { // development bonus for the matching skill, kept small
       const grp = { forehand: 'ground', backhand: 'ground', volley: 'volley', smash: 'smash', bandeja: 'smash', vibora: 'smash', lob: 'lob', slice: 'defense', block: 'defense', chiquita: 'defense', drop: 'defense' }[kind];
       q = clamp(q + (this.mods.q[grp] || 0), 0.3, 1);
@@ -467,7 +472,7 @@ export class PadelGame {
     const timing = clamp((sw.t - 0.17) / 0.12, -1, 1);
     const face = clamp(-timing * 0.8 + (b.y < 0.5 ? 0.4 : b.y > 1.6 && b.y <= 2.1 ? -0.2 : 0), -1, 1);
     const e = Math.abs(d - 0.95);
-    const ctx = { face, e, lateral: Math.abs(p.vx), forward: p.vz * os, spinMul: p.slot === 0 && this.mods ? this.mods.spin : 1, powerMul: (p.slot === 0 && this.mods ? this.mods.power || 1 : 1) * (1 - 0.16 * tiredK) };
+    const ctx = { face, e, lateral: Math.abs(p.vx), forward: p.vz * os, spinMul: p.slot === 0 && this.mods ? this.mods.spin : 1, powerMul: (p.slot === 0 && this.mods ? this.mods.power || 1 : 1) * (1 - 0.16 * tiredK), slip: !!sw.slip };
 
     let label;
     if (q < 0.4) label = 'poor';

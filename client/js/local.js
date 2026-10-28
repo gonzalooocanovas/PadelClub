@@ -27,6 +27,7 @@ export class LocalMatch {
 
   start() {
     this.game = new PadelGame({ settings: this.settings });
+    this.game.players[0].human = true; // the person at slot 0
     this.mem = [0, 1, 2, 3].map(makeBotMemory);
     this.queue = [];
     this.lastInput = null;

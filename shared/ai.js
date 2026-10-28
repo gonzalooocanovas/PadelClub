@@ -15,10 +15,10 @@ const SKILL = {
   // speed: top speed factor · react: seconds before reacting · noise: aim scatter · reach: swing distance
   // flub: chance to miss a ball outright · aggr: willingness to attack · lob/slice/smash: shot mix
   // serveSpin: chance of a spin serve · serveTiming: waits for the ideal bounce height · plan: replanning interval
-  easy: { speed: 0.9, sprint: true, react: 0.3, noise: 2.0, reach: 1.9, flub: 0.24, timingErr: 0.24, aggr: 0.12, lob: 0.35, slice: 0.08, smash: 0.35, serveSpin: 0, serveTiming: false, serveWindow: 0.45, servePace: 0.68, serveRisk: 0.0, plan: 0.12 },
-  normal: { speed: 0.96, sprint: true, react: 0.18, noise: 1.4, reach: 1.95, flub: 0.19, timingErr: 0.14, aggr: 0.3, lob: 0.45, slice: 0.18, smash: 0.5, serveSpin: 0.15, serveTiming: false, serveWindow: 0.25, servePace: 0.72, serveRisk: 0.3, plan: 0.1 },
-  hard: { speed: 0.95, sprint: true, react: 0.09, noise: 0.5, reach: 2.2, flub: 0.08, timingErr: 0.07, aggr: 0.5, lob: 0.5, slice: 0.25, smash: 0.7, serveSpin: 0.4, serveTiming: true, serveWindow: 0.12, servePace: 0.76, serveRisk: 0.6, plan: 0.07 },
-  expert: { speed: 1.1, sprint: true, react: 0.03, noise: 0.15, reach: 2.4, flub: 0.02, timingErr: 0.03, aggr: 0.45, lob: 0.55, slice: 0.3, smash: 0.85, serveSpin: 0.6, serveTiming: true, serveWindow: 0.05, servePace: 0.8, serveRisk: 0.85, plan: 0.05 },
+  easy: { speed: 0.9, sprint: true, react: 0.3, noise: 2.0, reach: 1.9, flub: 0.3, timingErr: 0.24, aggr: 0.12, lob: 0.35, slice: 0.08, smash: 0.35, serveSpin: 0, serveTiming: false, serveWindow: 0.45, servePace: 0.68, serveRisk: 0.0, plan: 0.12 },
+  normal: { speed: 0.96, sprint: true, react: 0.18, noise: 1.4, reach: 1.95, flub: 0.24, timingErr: 0.14, aggr: 0.3, lob: 0.45, slice: 0.18, smash: 0.5, serveSpin: 0.15, serveTiming: false, serveWindow: 0.25, servePace: 0.72, serveRisk: 0.3, plan: 0.1 },
+  hard: { speed: 0.95, sprint: true, react: 0.09, noise: 0.5, reach: 2.2, flub: 0.18, timingErr: 0.07, aggr: 0.5, lob: 0.5, slice: 0.25, smash: 0.7, serveSpin: 0.4, serveTiming: true, serveWindow: 0.12, servePace: 0.76, serveRisk: 0.6, plan: 0.07 },
+  expert: { speed: 1.1, sprint: true, react: 0.03, noise: 0.15, reach: 2.4, flub: 0.15, timingErr: 0.03, aggr: 0.45, lob: 0.55, slice: 0.3, smash: 0.85, serveSpin: 0.6, serveTiming: true, serveWindow: 0.05, servePace: 0.8, serveRisk: 0.85, plan: 0.05 },
 };
 
 const skillCache = new Map();
@@ -74,6 +74,7 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
     if (game.serverSlot === slot) serve(inp, game, p, os, skill, mem, dt);
     mem.plan = null; mem.react = 0; mem.lastTeam = -1;
     mem.role = Math.abs(p.z) < 5 ? 'net' : 'back'; // the server and the receiver start at the back, their partners at the net
+    if (game.aiTeam) game.aiTeam[p.team] = { mode: 'D', since: game.time, tick: -1 };
     return inp;
   }
   if (game.phase !== 'rally') return inp;
@@ -121,7 +122,10 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
     if (plan && partner.active) {
       const me = Math.hypot(plan.x - p.x, plan.z - p.z);
       const pa = Math.hypot(plan.x - partner.x, plan.z - partner.z);
-      responsible = me < pa - 0.3 || (Math.abs(me - pa) <= 0.3 && slot < partner.slot);
+      // the player on the side of the ball takes it; the middle goes to the nearer one
+      const side = (plan.x - (p.x + partner.x) / 2) * (p.x < partner.x ? -1 : 1) > 0 ? -0.5 : 0.5;
+      const margin = partner.human ? 0.9 : 0.3; // with a person as partner: do not steal their balls
+      responsible = me + side < pa - margin || (!partner.human && Math.abs(me + side - pa) <= 0.3 && slot < partner.slot);
     }
     if (plan && responsible) {
       if (mem.react <= 0) moveTo(inp, p, plan.x, plan.z - os * (plan.y > 1.8 ? 0.3 : 0.75), skill, true);
@@ -133,9 +137,10 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
     const dist = Math.hypot(dx, dz);
     const onMySide = p.team === 0 ? b.z < 0.2 : b.z > -0.2;
     if (responsible && onMySide && !p.swing && p.cd <= 0 && !r.serving
-        && dist < skill.reach && !mem.flub && b.y < 2.9 && b.y > 0.1 && mem.react <= 0 && swingNow(b, dx, dz, dist, mem)) {
+        && dist < skill.reach && b.y < 2.9 && b.y > 0.1 && mem.react <= 0 && swingNow(b, dx, dz, dist, mem)) {
       chooseShot(inp, game, p, os, skill);
       inp.swing = true;
+      inp.slip = !!mem.flub; // a mishit: the bot still goes for the ball (it used to just watch it go by) but strikes it badly
     }
   } else {
     formation(inp, game, p, os, skill, mem);
@@ -193,27 +198,64 @@ function serve(inp, game, p, os, skill, mem, dt) {
 }
 
 /**
- * Doubles tactics, decided per player from the same information (so the pair agrees without talking):
- *  'back'  both defend from the baseline (a lob is coming, or the opponents are attacking at the net)
- *  'net'   both take the net together (the opponents are pinned at the back after our shot)
- *  'mixed' one at the net, one at the baseline (the default)
- * A stance is held for a moment so the pair does not flicker between them.
+ * Doubles tactics, modelled on how real pairs move. A pair is almost always on the same line: both defending from the
+ * baseline ('D') or both attacking at the net ('A'); the one-up-one-back split only exists briefly (the serve, the return,
+ * a transition). The mode is decided ONCE per tick per team from shared information and stored on the game, so both
+ * team-mates always agree without talking:
+ *   incoming ball:  a lob or a deep ball → retreat (D); a short ball → go up (A)
+ *   our own shot:   a good (deep, high) lob or a short low ball → go up (A); a poor lob or a drive → stay back (D)
+ * A mode is held for a moment so the pair never flickers.
  */
-function stanceFor(game, p, skill, mem) {
+function flightInfo(game) {
+  const c = game._flight;
+  if (c && c.tick === game.tickNo) return c;
+  if (c && game.tickNo - c.tick < 4) return c; // recomputed every few ticks: it is only a tactical read
+  const samples = predictBall(game.ball, 2.6);
+  let apex = game.ball.y, firstFloor = null, netY = null, prevZ = game.ball.z;
+  for (const s of samples) {
+    apex = Math.max(apex, s.y);
+    if (netY === null && (prevZ < 0) !== (s.z < 0)) netY = s.y;
+    prevZ = s.z;
+    if (!firstFloor && s.floor) firstFloor = s;
+  }
+  game._flight = { tick: game.tickNo, apex, firstFloor, netY };
+  return game._flight;
+}
+
+function teamMode(game, p, skill) {
+  const T = game.aiTeam || (game.aiTeam = [{ mode: 'D', since: 0, tick: -1 }, { mode: 'D', since: 0, tick: -1 }]);
+  const S = T[p.team];
+  if (S.tick === game.tickNo) return S.mode;
+  S.tick = game.tickNo;
   const r = game.rally, b = game.ball;
-  const opp = game.players.filter((o) => o.team !== p.team && o.active);
-  const oppDeep = opp.length > 0 && opp.every((o) => Math.abs(o.z) > 5.4);
-  const oppNet = opp.length > 0 && opp.every((o) => Math.abs(o.z) < 4.6);
-  const mine = r.lastTeam === p.team;
-  const onMySide = p.team === 0 ? b.z < 0.5 : b.z > -0.5;
-  let want = 'mixed';
-  if (r.serving || r.hits <= 1) want = 'mixed'; // the serve and the return keep the starting roles
-  else if (!mine && onMySide && (b.y > 2.6 || b.vy > 4)) want = 'back'; // a lob is coming: everybody back
-  else if (!mine && oppNet && skill.aggr < 0.6) want = 'back'; // they are attacking: defend together
-  else if (mine && oppDeep && skill.aggr >= 0.3 && b.y < 2.6) want = 'net'; // they are pinned back: take the net together
-  if (mem.stance && game.time - mem.stanceAt < 0.7) return mem.stance;
-  if (want !== mem.stance) { mem.stance = want; mem.stanceAt = game.time; }
-  return mem.stance;
+  const f = flightInfo(game);
+  const dFloor = f.firstFloor ? Math.abs(f.firstFloor.z) : 6; // distance from the net of the first bounce
+  const lobby = f.apex > 3.2 && (f.netY === null || f.netY > 2.4);
+  let want = null;
+  const mate = game.players[p.slot ^ 1];
+  if (mate.human) {
+    // playing with a person: follow THEIR line (up when they are up, back when they are back) so the pair stays together; a
+    // lob coming over still sends us back to cover it
+    const incoming = r.lastTeam !== p.team;
+    const lobIn = incoming && f.apex > 3.2 && (f.netY === null || f.netY > 2.4);
+    if (lobIn) want = 'D';
+    else if (Math.abs(mate.z) < 4.4) want = 'A';
+    else if (Math.abs(mate.z) > 5.8) want = 'D';
+    if (want && want !== S.mode && game.time - S.since >= 0.6) { S.mode = want; S.since = game.time; }
+    return S.mode;
+  }
+  if (r.lastTeam !== p.team) { // the ball is coming to us
+    const onMySide = p.team === 0 ? b.z < 0.5 : b.z > -0.5;
+    if (lobby || dFloor > 6.2) want = 'D';
+    else if (dFloor < 4.3 && b.y < 2.4 && skill.aggr >= 0.1) want = 'A';
+    else if (!onMySide) want = null;
+  } else { // we hit it
+    if (lobby) want = dFloor > 7.2 ? 'A' : 'D'; // a deep lob wins the net, a poor one gets smashed
+    else if (dFloor < 3.6 && f.apex < 2.0) want = 'A'; // a short low ball: they have to lift it
+    else if (skill.aggr >= 0.1 && f.apex < 2.2 && game.players.filter((o) => o.team !== p.team && o.active).every((o) => Math.abs(o.z) > 6)) want = 'A';
+  }
+  if (want && want !== S.mode && game.time - S.since >= 0.8) { S.mode = want; S.since = game.time; }
+  return S.mode;
 }
 
 function formation(inp, game, p, os, skill, mem) {
@@ -221,33 +263,25 @@ function formation(inp, game, p, os, skill, mem) {
   if (game.singles) { moveTo(inp, p, clamp(b.x * 0.45, -2.4, 2.4), -os * ((skill.backZ ?? 7.6) - 0.1), skill, false); return; }
   const partner = game.players[p.slot ^ 1];
   const dp = Math.abs(p.z), dq = Math.abs(partner.z);
-  const stance = mem ? stanceFor(game, p, skill, mem) : 'mixed';
-  if (stance !== 'mixed') {
-    // the pair moves as a unit: same depth, side by side, shifting toward the ball; each keeps their own side
-    const lower = p.x < partner.x || (p.x === partner.x && p.slot < partner.slot);
-    const centre = clamp(b.x * 0.45, -1.6, 1.6);
-    const tx = clamp(centre + (lower ? -1 : 1) * (stance === 'net' ? 1.9 : 2.5), -3.9, 3.9);
-    const tz = -os * (stance === 'net' ? (skill.netZ ?? 3.4) - 0.2 : (skill.backZ ?? 7.6));
-    mem.lastStance = stance;
-    moveTo(inp, p, tx, tz, skill, false);
+  const r = game.rally;
+  if (r.serving || r.hits <= 1) {
+    // the serve and the return keep the starting roles: server and receiver at the baseline, their partners at the net
+    let net = dp < dq || (dp === dq && p.slot % 2 === 0);
+    if (mem?.role) net = mem.role === 'net';
+    const tz = -os * (net ? (skill.netZ ?? 3.4) : (skill.backZ ?? 7.6));
+    const off = net ? (p.team === 0 ? -1.3 : 1.3) : (p.team === 0 ? 1.3 : -1.3);
+    moveTo(inp, p, clamp(b.x * 0.45 + off, -3.6, 3.6), tz, skill, false);
     return;
   }
-  // roles are fixed when the point starts (who is at the net, who holds the baseline) and only swap when the pair has
-  // really changed ends (a lob chase): players no longer drift up to the net just because they hit the last ball
-  let net = dp < dq || (dp === dq && p.slot % 2 === 0);
-  if (mem) {
-    if (mem.lastStance && mem.lastStance !== 'mixed') mem.role = dp < dq ? 'net' : 'back'; // coming out of a pair stance
-    mem.lastStance = 'mixed';
-    if (mem.role) {
-      net = mem.role === 'net';
-      if (net && dp - dq > 2.8) net = false;
-      else if (!net && dq - dp > 2.8) net = true;
-    }
-  }
-  const tz = -os * (net ? (skill.netZ ?? 3.4) : (skill.backZ ?? 7.6));
-  // the net player covers the middle against the opponents' hitter, the baseline player the ball side
-  const off = net ? (p.team === 0 ? -1.3 : 1.3) : (p.team === 0 ? 1.3 : -1.3);
-  const tx = clamp(b.x * 0.45 + off, -3.6, 3.6);
+  // From the first return on, the pair moves as a unit: same line, side by side, shifting with the ball
+  const mode = teamMode(game, p, skill);
+  const lower = p.x < partner.x || (p.x === partner.x && p.slot < partner.slot); // each keeps their own side
+  const att = mode === 'A';
+  const centre = clamp(b.x * (att ? 0.5 : 0.55), -1.7, 1.7);
+  const half = att ? 1.2 : 1.55; // the net pair is tighter; defenders cover more ground
+  const tx = clamp(centre + (lower ? -half : half), -3.9, 3.9);
+  const tz = -os * (att ? (skill.netZ ?? 3.4) - 0.5 : (skill.backZ ?? 7.6) - 0.4);
+  if (mem) mem.role = Math.abs(p.z) < Math.abs(partner.z) ? 'net' : 'back';
   moveTo(inp, p, tx, tz, skill, false);
 }
 

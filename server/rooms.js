@@ -403,6 +403,7 @@ export class Room {
       if (!g.players[s].active) continue;
       const slot = this.slots[s];
       const m = slot?.kind === 'human' ? this.members.get(slot.id) : null;
+      g.players[s].human = !!(m && m.connected); // bots read this to play sensibly with a person as partner
       if (m && m.connected) {
         const q = this.queues[s];
         let inp = q.shift();
