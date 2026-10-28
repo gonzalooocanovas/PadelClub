@@ -131,3 +131,7 @@ Method: a simulation harness measured how bot pairs really move and why they los
 - ✅ Spin that follows the physics: topspin/backspin turn about the axis across its path (the right way round), sidespin about the vertical, rolling on the floor; speed streak (a tapered tail) on fast balls; squash on every impact (floor and walls); a scuff mark where it bounced; a darker, sharper shadow near the floor and a faint plumb line from the ball to its shadow when it is high (readable height from any camera)
 - ✅ Physics: a ball resting on the floor now rolls and slows gently (it used to be hit by the bounce friction every tick, stopping dead and emitting a bounce event each tick); tested
 - Seen in one browser screenshot only; not judged in real-time play
+
+## Ball glitch and bundles (latest pass)
+- ✅ Ball: measured the rendered ball frame by frame in a real-time local match: the only anomalies were the ball teleporting 5-9 m to the server's hand between points (and after a fault). It now pops in at the hand (0 to 1 with a small overshoot, trail cleared, no streak) instead of jumping in view
+- ✅ `node bundle.cjs` writes `bundles/PADEL_CLUB_FULL_CODE.txt` (everything: briefing, status, all source, tests) and `bundles/PADEL_CLUB_CORE.txt` (documents + game logic + server + client game loop) to give to an AI that cannot read the repository

@@ -645,6 +645,11 @@ if (swinging) {
   }
 
   setBall(x, y, z) {
+    // A jump of more than 1.5 m in one frame is not a flight (a real shot moves at most ~0.7 m per frame): the ball was put back in
+    // the server's hand for the next point. Make it appear instead of teleporting in view, and drop the old trail.
+    const bp = this.ball.position;
+    if (this.ballSeen && Math.hypot(x - bp.x, y - bp.y, z - bp.z) > 1.5) { this.ballAppear = { t: 0 }; this.trailPos.length = 0; }
+    this.ballSeen = true;
     this.ball.position.set(x, y, z);
     // the shadow is sharper and darker near the floor, softer and larger when the ball is high
     const k = 1 + y * 0.18;
@@ -689,11 +694,18 @@ if (swinging) {
         else { sz = 1 - e; sx = sy = 1 + e * 0.5; }
       }
     }
-    this.ball.scale.set(this.ballBase * sx, this.ballBase * sy, this.ballBase * sz);
+    let appear = 1;
+    if (this.ballAppear) { // pops in at the server's hand: 0 -> 1 with a small overshoot
+      this.ballAppear.t += dt;
+      const u = Math.min(1, this.ballAppear.t / 0.28);
+      appear = u >= 1 ? 1 : 1 + 2.7 * Math.pow(u - 1, 3) + 1.7 * Math.pow(u - 1, 2);
+      if (u >= 1) this.ballAppear = null;
+    }
+    this.ball.scale.set(this.ballBase * sx * appear, this.ballBase * sy * appear, this.ballBase * sz * appear);
     // speed streak
     const v = this.ballVel || { x: 0, y: 0, z: 0 };
     const sp = Math.hypot(v.x, v.y, v.z);
-    const showStreak = this.trailOn && sp > 14;
+    const showStreak = this.trailOn && sp > 14 && !this.ballAppear;
     this.streak.visible = showStreak;
     if (showStreak) {
       const dir = new THREE.Vector3(v.x, v.y, v.z).normalize().negate(); // the tail points backwards along the flight
