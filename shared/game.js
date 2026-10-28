@@ -126,7 +126,7 @@ export class PadelGame {
       mod: inp.mod === 1 || inp.mod === 2 || inp.mod === 3 ? inp.mod : 0, lob: !!inp.lob,
       keep: !!inp.keep, // bots decide their target when they start the swing and keep it until contact
     };
-    if (inp.swing) p.wantSwing = { ax: p.input.ax, az: p.input.az, mod: p.input.mod, lob: p.input.lob, pace: clamp(+inp.pace || 0.9, 0.6, 1.15), slip: !!inp.slip };
+    if (inp.swing) p.wantSwing = { ax: p.input.ax, az: p.input.az, mod: p.input.mod, lob: p.input.lob, pace: clamp(+inp.pace || 0.9, 0.6, 1.15), slip: !!inp.slip, tac: typeof inp.tac === 'string' ? inp.tac.slice(0, 14) : '' };
     if (inp.jump) p.wantJump = true;
   }
 
@@ -276,7 +276,7 @@ export class PadelGame {
 
   startSwing(p, sw) {
     if (this.phase === 'serve' && p.slot !== this.serverSlot) return;
-    p.swing = { t: 0, done: false, ax: sw.ax, az: sw.az, mod: sw.mod, lob: sw.lob, pace: sw.pace || 0.9, slip: !!sw.slip };
+    p.swing = { t: 0, done: false, ax: sw.ax, az: sw.az, mod: sw.mod, lob: sw.lob, pace: sw.pace || 0.9, slip: !!sw.slip, tac: sw.tac || '' };
     p.kind = SHOT_IDS.indexOf(this.phase === 'serve' ? 'serve' : this.classify(p, sw));
   }
 
@@ -364,7 +364,7 @@ export class PadelGame {
       v = solveLaunch(b, aimX2, aimZ2, T);
       const sim = simulateShot(b, v, spin);
       if (needClear && (sim.kind === 'net' || (sim.netH !== null && sim.netH < NET_CLEAR))) { T *= 1.06; continue; }
-      if (sim.kind === 'floor' && corrections < 4) {
+      if (sim.kind === 'floor' && corrections < 8) {
         const ex = tx - sim.x, ez = tz - sim.z;
         if (Math.hypot(ex, ez) < 0.08) break;
         aimX2 += ex; aimZ2 += ez; corrections++;
@@ -507,7 +507,8 @@ export class PadelGame {
     if (kind === 'bandeja') st.bandejas++;
     if (kind === 'vibora') st.viboras++;
     this.stats.longestRally = Math.max(this.stats.longestRally, r.hits);
-    this.events.push({ e: 'hit', slot: p.slot, kind, q: +q.toFixed(2), label, face: +face.toFixed(2), off: +e.toFixed(2), x: b.x, y: b.y, z: b.z, sb: v.sb, ss: v.ss });
+    const wallBall = !!r.wallTouched; r.wallTouched = false;
+    this.events.push({ e: 'hit', slot: p.slot, kind, tac: sw.tac || '', wall: wallBall, q: +q.toFixed(2), label, face: +face.toFixed(2), off: +e.toFixed(2), x: b.x, y: b.y, z: b.z, sb: v.sb, ss: v.ss });
     return true;
   }
 
@@ -532,6 +533,7 @@ export class PadelGame {
     }
     if (e.type === 'cord') { this.events.push({ e: 'ball', k: 'net', x: e.x, y: e.y, z: 0, s: e.speed * 0.5 }); return; }
     if (e.type === 'wall') {
+      if (r.bounces >= 1) r.wallTouched = true; // the ball has come off a wall after bouncing: whoever plays it next is playing a rebound
       this.events.push({ e: 'ball', k: 'wall', axis: e.axis, x: e.x, y: e.y, z: e.z, s: e.speed, mesh: !!e.mesh });
       if (r.bounces === 0) {
         if (r.serving) this.fault('out');

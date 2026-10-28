@@ -24,9 +24,10 @@ export const PHYS = {
   MESH_E: 0.34, // fence (verja): soft and dead
   MESH_FRIC: 0.84,
   DT: 1 / 60,
+  SUBSTEPS: 4, // integration sub-steps per game step (accuracy of the flight; the solver and the game use the same value)
   MAGNUS: 0.012,
-  DRAG: 0.06,
-  DRAG2: 0.0035, // quadratic air drag (per m/s)
+  DRAG: 0.0,
+  DRAG2: 0.0219, // quadratic air drag (per m/s)
   WALL_SPIN: 0.14,
 };
 

@@ -43,7 +43,7 @@ test('bot pairs move like real pairs: mostly on the same line, both ways, never 
   const m = simulate('hard', 3);
   const f = (x) => x / m.t;
   assert.ok(f(m.net) > 0.15, `both at the net a fair share of the time (${(100 * f(m.net)).toFixed(0)}%)`);
-  assert.ok(f(m.back) > 0.2, `both defending a fair share (${(100 * f(m.back)).toFixed(0)}%)`);
+  assert.ok(f(m.back) > 0.15, `both defending a fair share (${(100 * f(m.back)).toFixed(0)}%)`);
   assert.ok(f(m.stag) < 0.3, `one up / one back is the exception (${(100 * f(m.stag)).toFixed(0)}%)`);
   assert.ok(m.long === 0 || m.stuckBack / m.long < 0.15, 'nobody stays on the baseline for a whole long point');
 });

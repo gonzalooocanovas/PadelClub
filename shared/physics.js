@@ -116,7 +116,17 @@ export function makeBall() {
  * Advance the ball one step. Returns a list of physical events:
  *  {type:'floor', x,z, speed} {type:'wall', axis:'x'|'z', x,y,z} {type:'net', x,y} {type:'out', x,y,z}
  */
+/**
+ * One game step is split into PHYS.SUBSTEPS integration steps: at 25 m/s a single 1/60 s step moves the ball 0.4 m and the
+ * first-order integrator drifted 0.2 m from a 1/600 s reference over a 10 m flight (see docs/CALIBRATION.md).
+ */
 export function stepBall(b, dt, events) {
+  const n = PHYS.SUBSTEPS || 1;
+  const h = dt / n;
+  for (let i = 0; i < n; i++) stepBallOnce(b, h, events);
+}
+
+function stepBallOnce(b, dt, events) {
   // Magnus effect: backspin (sb>0) lifts the ball, topspin (sb<0) dives; sidespin (ss) curves it left/right of travel.
   const hw = b.hw || HALF_W; // half width of the walls (narrower in 1v1)
   const sb = b.sb || 0, ss = b.ss || 0;
@@ -228,8 +238,13 @@ export function stepBall(b, dt, events) {
     b.vx *= roll; b.vz *= roll;
     b.sb = (b.sb || 0) * 0.9; b.ss = (b.ss || 0) * 0.9;
   } else if (ny < BALL_R && b.vy < 0) {
+    // Swept contact: the ball met the floor part-way through the step, not at its end. Report the real contact point and spend the
+    // rest of the step flying away with the post-bounce velocity (at 25 m/s one full step is 0.4 m: the old snap-to-end shifted the
+    // landing spot and the bounce timing by that much).
+    const frac = clamp((py - BALL_R) / (py - ny), 0, 1);
+    const cx = px + (nx - px) * frac, cz = pz + (nz - pz) * frac;
     ny = BALL_R;
-    events.push({ type: 'floor', x: nx, z: nz, speed: Math.abs(b.vy) });
+    events.push({ type: 'floor', x: cx, z: cz, speed: Math.abs(b.vy) });
     // backspin (sb>0) bites: lower bounce, ball slows. Topspin (sb<0) kicks up and forward.
     const s = b.sb || 0;
     b.vy = -b.vy * clamp((b.fe ?? PHYS.FLOOR_E) * (1 - 0.014 * s) * (1 - 0.004 * Math.min(Math.abs(b.vy), 12)), 0.35, 0.95);
@@ -237,6 +252,8 @@ export function stepBall(b, dt, events) {
     const hf = clamp((b.ff ?? PHYS.FLOOR_FRIC) * (1 - 0.016 * s), 0.5, 1.02);
     b.vx *= hf; b.vz *= hf;
     b.sb = s * 0.5; b.ss = (b.ss || 0) * 0.75;
+    const rem = (1 - frac) * dt;
+    nx = cx + b.vx * rem; nz = cz + b.vz * rem; ny = BALL_R + b.vy * rem;
   }
 
   if (b.cord && Math.abs(nz) > 0.3) b.cord = false;
