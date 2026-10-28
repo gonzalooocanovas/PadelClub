@@ -437,6 +437,10 @@ function act(name, d, el) {
     case 'historyClear': { saveHistory(localStorage, []); ui.historyModal([], summarize([])); toast('History cleared'); break; }
     case 'controls': ui.controls(); break;
     case 'settings': ui.settingsModal(() => {}); break;
+    case 'pauseRequest': net.send({ t: 'pauseReq' }); ui.closeModal(); match?.setPaused(false); toast('Pause requested: waiting for the other players'); break;
+    case 'pauseAccept': net.send({ t: 'pauseAccept' }); break;
+    case 'pauseDeny': net.send({ t: 'pauseDeny' }); ui.clearPauseOverlay(); break;
+    case 'pauseResume': net.send({ t: 'pauseResume' }); break;
     case 'closeModal': ui.closeModal(); match?.setPaused(false); local?.setPaused(false); break;
     case 'toggle':
       setSetting(d.key, d.val === '1');
@@ -499,6 +503,33 @@ net.on('queue', (m) => {
   if (m.cancelled || !queued) return;
   ui.quickModal(m);
 });
+// online pause: a request the others must accept, then a freeze of at most 30 s until everybody presses Resume
+let pauseTimer = null;
+function renderPause(m, offset) {
+  const left = (t) => Math.max(0, Math.ceil((t - (Date.now() - offset)) / 1000));
+  const mineRequest = m.byId === room?.you;
+  if (m.phase === 'request') {
+    ui.pauseOverlay(mineRequest
+      ? `<h2>Pause requested</h2><p class="mute">Waiting for the other players to accept… (${left(m.expires)}s)</p>`
+      : `<h2>${m.by} wants to pause</h2><p class="mute">Accept? It stops the match for 30 seconds at most. (${left(m.expires)}s)</p><div class="row" style="justify-content:center;margin-top:12px"><button class="btn primary" data-act="pauseAccept">Accept</button><button class="btn" data-act="pauseDeny">Decline</button></div>`);
+  } else if (m.phase === 'active') {
+    const me = m.resumedIds?.includes(room?.you);
+    ui.pauseOverlay(`<h2>Paused</h2><p class="mute">The match resumes when everyone presses Resume, or in ${left(m.until)}s.</p><p class="mute" style="margin-top:6px">Resumed: ${m.resumed?.length || 0} / ${m.humans?.length || 0}</p><div class="row" style="justify-content:center;margin-top:12px"><button class="btn primary" data-act="pauseResume" ${me ? 'disabled' : ''}>${me ? 'Waiting for the others…' : 'Resume'}</button></div>`);
+  }
+}
+net.on('pause', (m) => {
+  clearInterval(pauseTimer);
+  if (m.phase === 'request' || m.phase === 'active') {
+    const offset = Date.now() - (m.now || Date.now());
+    renderPause(m, offset);
+    match?.setPaused(m.phase === 'active');
+    pauseTimer = setInterval(() => renderPause(m, offset), 500);
+  } else {
+    ui.clearPauseOverlay();
+    match?.setPaused(false);
+    if (m.phase === 'denied') toast(m.expired ? 'The pause request expired' : `${m.by} declined the pause`, true);
+  }
+});
 net.on('rooms', (m) => { if (document.getElementById('modal')) ui.roomsModal(m.rooms); });
 
 net.on('room', (m) => {
@@ -521,6 +552,7 @@ net.on('room', (m) => {
 
 net.on('start', (m) => {
   queued = false;
+  clearInterval(pauseTimer); ui.clearPauseOverlay();
   if (match) match.stop();
   ui.clear();
   world.setCourt(m.settings.court || 'indoor');

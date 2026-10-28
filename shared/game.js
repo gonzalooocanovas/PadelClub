@@ -142,8 +142,7 @@ export class PadelGame {
       if (live) {
         const mul = p.swing ? PLAYER.SWING_MOVE : 1; // planted while swinging
         if (this.phase !== 'serve') stepPlayer(p, p.input, dt, undefined, mul);
-        else if (p.slot === this.serverSlot) stepPlayer(p, p.input, dt, serveLimit(p.team), mul); // server: behind the line only
-        else { p.vx = 0; p.vz = 0; this.rest(p, dt); } // everyone else waits for the serve (and catches their breath)
+        else { p.vx = 0; p.vz = 0; this.rest(p, dt); } // the server stays planted on the line, everyone else waits too (and catches their breath)
       } else this.rest(p, dt); // between points everybody recovers
       p.jumpT = Math.max(0, p.jumpT - dt);
       p.cd = Math.max(0, p.cd - dt);

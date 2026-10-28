@@ -293,8 +293,7 @@ export class MatchClient {
     this.me.inRally = this.phase === 'rally';
     const mul = this.swingLocal ? PLAYER.SWING_MOVE : 1; // planted while swinging
     if (this.phase === 'serve') {
-      if (this.slot === this.serverSlot) stepPlayer(this.me, inp, TICK, serveLimit(this.team), mul);
-      else { this.me.vx = 0; this.me.vz = 0; }
+      this.me.vx = 0; this.me.vz = 0; // the server stays planted on the line until the serve is hit
     } else {
       stepPlayer(this.me, inp, TICK, undefined, mul);
     }

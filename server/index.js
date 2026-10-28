@@ -194,6 +194,8 @@ export function createGameServer({ port = 0, dataDir = process.env.DATA_DIR || p
       case 'start': err = room.start(member); break;
       case 'rematch': err = room.rematch(member); return err ? fail(ws, err) : undefined;
       case 'lobby': err = room.toLobby(member); break;
+      case 'pauseReq': case 'pauseAccept': case 'pauseDeny': case 'pauseResume':
+        err = room.pauseCtl(member, msg.t.slice(5).toLowerCase()); if (err) return fail(ws, err, 'pause'); return;
       case 'chat': room.chat(member, msg.text); return;
       case 'emote': room.emote(member, msg.id); return;
       default: return; // unknown messages (including any attempt to submit scores) are ignored

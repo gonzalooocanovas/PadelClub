@@ -104,3 +104,7 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 - ✅ Pressure on contact (everyone: bots, humans, online): a ball reached at full stretch, hit with great pace, or taken on the run is answered with a weaker, shorter, less accurate shot ("Stretched" label), so a good volley or placed ball wins the exchange. A poorly struck ball also carries less pace and falls shorter
 - ✅ Lobs: quality depends on contact. A clean lob climbs high and lands deep; a poor one is low and short (about 2.2+ m apex), easy to smash
 - ✅ Doubles positioning: bots choose a stance (both back when a lob comes or the rivals attack, both at the net when the rivals are pinned back, otherwise one up one back), move as a pair keeping their width, and shift toward the ball
+
+## Online pause, fixed server (latest pass)
+- ✅ Online pause: the pause menu has "Request a pause". The other humans get an Accept / Decline prompt (10 s to answer). When everybody accepts the match freezes for at most 30 s, or until every human presses Resume; a disconnected player does not block it; each player has two pauses per match; with only bots around a pause starts at once. Server-authoritative (Room.pauseCtl), tested with fake clocks and over real WebSockets. Solo matches still pause instantly
+- ✅ The server stays planted on the line from the start of the point until the serve is hit (no movement at all), so the serve position is the same every time

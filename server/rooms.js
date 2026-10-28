@@ -13,6 +13,9 @@ const MAX_QUEUE = 10;
 const RESULTS_DELAY = 4; // seconds of celebration before the results screen
 const LOBBY_GRACE_MS = 60_000;
 const EMPTY_ROOM_TTL_MS = 10 * 60_000;
+export const PAUSE_REQUEST_MS = 10_000; // how long the others have to accept
+export const PAUSE_MAX_MS = 30_000; // a pause never lasts longer than this
+const PAUSES_PER_PLAYER = 2;
 
 const cleanName = (n) => String(n ?? '').replace(/[^\p{L}\p{N} _.-]/gu, '').trim().slice(0, 16) || 'Guest';
 const cleanText = (t) => String(t ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 140);
@@ -37,6 +40,8 @@ export class Room {
     this.persisted = false;
     this.emptySince = null;
     this.chatTimes = new Map();
+    this.pause = null; // {phase:'request'|'active', by, accepts:Set, resumes:Set, expires|until}
+    this.pausesUsed = new Map(); // member id -> pauses used this match
   }
 
   // ------------------------------------------------------------ membership
@@ -111,7 +116,7 @@ export class Room {
     this.emptySince = null;
     this.queues[this.slotOf(member.id)] = [];
     this.broadcastRoom();
-    if (this.state === 'match' && this.game) this.sendStart(member);
+    if (this.state === 'match' && this.game) { this.sendStart(member); if (this.pause) this.send(member, this.pauseView()); }
     if (this.state === 'results' && this.lastResultsMsg) this.send(member, this.lastResultsMsg);
   }
 
@@ -243,6 +248,7 @@ export class Room {
     this.starved = [0, 0, 0, 0];
     this.botMem = [0, 1, 2, 3].map(makeBotMemory);
     this.persisted = false;
+    this.pause = null; this.pausesUsed = new Map();
     this.resultAt = 0;
     this.lastResultsMsg = null;
     for (const m of this.members.values()) { m.ready = false; m.rematch = false; }
@@ -329,11 +335,70 @@ export class Room {
     }
   }
 
+  // ------------------------------------------------------------ pause (online)
+  // One player asks, the other humans accept. The game then stops for at most 30 s, or until every human presses Resume.
+
+  connectedHumans() {
+    return [...this.members.values()].filter((m) => m.connected && this.slotOf(m.id) >= 0);
+  }
+
+  pauseView(extra = {}) {
+    const p = this.pause;
+    if (!p) return { t: 'pause', phase: 'off', ...extra };
+    const name = (id) => this.members.get(id)?.name || '?';
+    return {
+      t: 'pause', phase: p.phase, by: name(p.by), byId: p.by, expires: p.expires, until: p.until, now: Date.now(),
+      accepted: [...p.accepts].map(name), resumed: [...(p.resumes || [])].map(name), resumedIds: [...(p.resumes || [])], humans: this.connectedHumans().map((m) => m.id), ...extra,
+    };
+  }
+
+  /** kind: 'req' | 'accept' | 'deny' | 'resume'. Returns an error message or null. */
+  pauseCtl(m, kind, now = Date.now()) {
+    if (this.state !== 'match' || !this.game || this.game.phase === 'ended') return 'There is no match to pause';
+    if (this.slotOf(m.id) < 0) return 'Only players can pause';
+    const p = this.pause;
+    if (kind === 'req') {
+      if (p) return p.phase === 'active' ? 'Already paused' : 'A pause was already requested';
+      if ((this.pausesUsed.get(m.id) || 0) >= PAUSES_PER_PLAYER) return 'You have used your pauses for this match';
+      this.pause = { phase: 'request', by: m.id, accepts: new Set([m.id]), resumes: new Set(), expires: now + PAUSE_REQUEST_MS };
+      this.pauseEvaluate(now);
+      if (this.pause?.phase === 'request') this.broadcast(this.pauseView());
+      return null;
+    }
+    if (!p) return null;
+    if (kind === 'accept' && p.phase === 'request' && m.id !== p.by) { p.accepts.add(m.id); this.pauseEvaluate(now); if (this.pause?.phase === 'request') this.broadcast(this.pauseView()); return null; }
+    if (kind === 'deny' && p.phase === 'request' && m.id !== p.by) { this.pause = null; this.broadcast({ t: 'pause', phase: 'denied', by: m.name }); return null; }
+    if (kind === 'resume' && p.phase === 'active') { p.resumes.add(m.id); this.pauseEvaluate(now); if (this.pause) this.broadcast(this.pauseView()); return null; }
+    return null;
+  }
+
+  /** Move the pause forward: accepted by everybody, resumed by everybody, or timed out. */
+  pauseEvaluate(now = Date.now()) {
+    const p = this.pause;
+    if (!p) return;
+    const humans = this.connectedHumans();
+    if (p.phase === 'request') {
+      if (now >= p.expires) { this.pause = null; this.broadcast({ t: 'pause', phase: 'denied', by: '', expired: true }); return; }
+      if (humans.every((h) => p.accepts.has(h.id))) {
+        p.phase = 'active'; p.until = now + PAUSE_MAX_MS; p.resumes = new Set();
+        this.pausesUsed.set(p.by, (this.pausesUsed.get(p.by) || 0) + 1);
+        this.broadcast(this.pauseView());
+      }
+      return;
+    }
+    if (now >= p.until || humans.every((h) => p.resumes.has(h.id))) {
+      this.pause = null;
+      for (let s = 0; s < 4; s++) { this.queues[s] = []; this.lastInput[s] = null; this.starved[s] = 0; } // nothing stale carries over
+      this.broadcast({ t: 'pause', phase: 'off' });
+    }
+  }
+
   // ------------------------------------------------------------ simulation
 
   step(dt) {
     const g = this.game;
     if (!g) return;
+    if (this.pause) { this.pauseEvaluate(); if (this.pause?.phase === 'active') return; } // the match is frozen while paused
     for (let s = 0; s < 4; s++) {
       if (!g.players[s].active) continue;
       const slot = this.slots[s];

@@ -322,6 +322,14 @@ export class UI {
     this.openModal(`<h2>Public rooms</h2>${rows}<div class="row" style="margin-top:12px"><button class="btn small" data-act="rooms">Refresh</button></div>`);
   }
 
+  pauseOverlay(html) {
+    let el = document.getElementById('pauseov');
+    if (!el) { el = document.createElement('div'); el.className = 'screen'; el.id = 'pauseov'; el.style.zIndex = 30; this.root.appendChild(el); }
+    el.innerHTML = `<div class="panel modal" style="text-align:center">${html}</div>`;
+  }
+
+  clearPauseOverlay() { document.getElementById('pauseov')?.remove(); }
+
   quickModal(m) {
     const text = `<div class="qm"><div class="spin"></div><p style="font-size:18px;font-weight:700;margin:10px 0 4px">Looking for players…</p>
       <p class="mute">${m.waiting ?? 1} in the queue · ${m.online ?? '?'} online</p>
@@ -391,8 +399,8 @@ export class UI {
   }
 
   pauseMenu(local = false, mouseAimOn = false) {
-    this.openModal(`<h2>Paused</h2><p class="mute" style="margin-bottom:14px">${local ? 'The match is stopped.' : 'Online matches cannot be stopped: the game keeps running for the other players.'}</p>
-      <div class="col"><button class="btn primary" data-act="closeModal">Resume</button><button class="btn" data-act="mouseAim" data-val="${mouseAimOn ? 0 : 1}" data-pause="1">Mouse aim: ${mouseAimOn ? 'ON (click to switch off)' : 'OFF (click to switch on)'}</button><button class="btn" data-act="settings">Settings</button><button class="btn" data-act="controls">Controls</button><button class="btn ghost" data-act="leave">Leave match</button></div>`);
+    this.openModal(`<h2>Paused</h2><p class="mute" style="margin-bottom:14px">${local ? 'The match is stopped.' : 'Online, the match only stops if the other players accept a pause (30 s at most, two per player).'}</p>
+      <div class="col"><button class="btn primary" data-act="closeModal">Resume</button>${local ? '' : '<button class="btn" data-act="pauseRequest">Request a pause (the others must accept)</button>'}<button class="btn" data-act="mouseAim" data-val="${mouseAimOn ? 0 : 1}" data-pause="1">Mouse aim: ${mouseAimOn ? 'ON (click to switch off)' : 'OFF (click to switch on)'}</button><button class="btn" data-act="settings">Settings</button><button class="btn" data-act="controls">Controls</button><button class="btn ghost" data-act="leave">Leave match</button></div>`);
   }
 
   controls() {
