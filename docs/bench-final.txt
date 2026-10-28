@@ -1,61 +1,68 @@
-PADEL CLUB bot benchmark   tag=final   matches per pairing=100   games per set=3   node v24.19.0   12th Gen Intel(R) Core(TM) i7-1255U, 12 threads   100 s
+PADEL CLUB bot benchmark   tag=final   matches per pairing=100   games per set=3   node v24.19.0   12th Gen Intel(R) Core(TM) i7-1255U, 12 threads   123 s
 Seeds: 1000..1099 (self-play 5000..). Side swapped on alternate seeds. Every match is deterministic for its seed.
 
 == easy:normal ==
    stronger (normal) won 83/98 = 84.7%   95% CI [76%, 90%]   unfinished: 2
-   points 3014   rally 6.24 shots   aces 0.0%   double faults 0.0%   errors 92.1%   winners 7.9%   por-4 3.8%
-   points by reason: own-side 40.5%, net 32.0%, out 19.6%, bounce 4.1%, out-after-bounce 3.8%
-   errors by last shot (tactic/kind): corner-wall/forehand 653, corner-wall/backhand 557, corner-wall/slice 314, drop/drop 305, corner-wall/volley 253, recovery/lob 161, drop/chiquita 109, slice/slice 96
-   teamwork: incoming balls 18810   clearly reachable ones the whole team ignored 96 (0.5%)   double commitments 0   overlap 0.7%   split one-up-one-back 17.2%   both net 26.9%   both back 32.0%   points lost to positioning 96
-   wall play: rebounds played 2163 of 18810 shots (11.5%)   tactics chosen: corner-wall 10441 (won point 0.3%), smash 871 (won point 4.5%), chiquita 905 (won point 0.0%), drop 1275 (won point 0.0%), recovery 491 (won point 0.0%), slice 442 (won point 0.0%), por4 339 (won point 46.3%), lob 247 (won point 0.0%), drive 339 (won point 0.0%), bajada 176 (won point 0.0%), fallback 212 (won point 5.7%), bandeja 45 (won point 0.0%), vibora 11 (won point 0.0%)
-   invalid: NaN states 0   mean match length 337 s
+   points 2885   rally 6.16 shots   aces 0.1%   double faults 0.0%   errors 88.8%   winners 11.2%   por-4 4.5%
+   points by reason: own-side 43.1%, net 27.1%, out 18.7%, bounce 6.7%, out-after-bounce 4.5%
+   errors by last shot (tactic/kind): lob/lob 812, chiquita/chiquita 253, drive/forehand 237, drop/drop 235, drive/volley 202, drop/chiquita 139, chiquita/drop 139, recovery/lob 131
+   errors by contact label: late 1623, poor 935, perfect 4, off-centre 1
+   teamwork: incoming balls 17787   clearly reachable ones the whole team ignored 95 (0.5%)   double commitments 0   overlap 0.7%   split one-up-one-back 13.6%   both net 31.8%   both back 35.3%   points lost to positioning 95
+   wall play: rebounds played 1086 of 17787 shots (6.1%)   tactics chosen: lob 3043 (won point 0.0%), smash 1519 (won point 2.1%), drop 1453 (won point 0.0%), chiquita 2174 (won point 0.0%), drive 3519 (won point 1.3%), recovery 418 (won point 0.0%), slice 354 (won point 0.0%), por4 528 (won point 42.6%), bandeja 744 (won point 0.0%), fallback 397 (won point 3.0%), bajada 534 (won point 0.0%), corner-wall 215 (won point 1.9%), vibora 2 (won point 0.0%)
+   invalid: NaN states 0   mean match length 340 s
 
 == normal:hard ==
-   stronger (hard) won 93/97 = 95.9%   95% CI [90%, 98%]   unfinished: 3
-   points 2769   rally 10.78 shots   aces 0.0%   double faults 0.0%   errors 94.5%   winners 5.5%   por-4 2.7%
-   points by reason: net 41.6%, own-side 37.9%, out 15.0%, bounce 2.7%, out-after-bounce 2.7%
-   errors by last shot (tactic/kind): corner-wall/forehand 691, corner-wall/backhand 532, corner-wall/slice 441, corner-wall/volley 339, drop/drop 203, recovery/lob 95, slice/slice 70, drop/chiquita 64
-   teamwork: incoming balls 29849   clearly reachable ones the whole team ignored 43 (0.1%)   double commitments 0   overlap 0.4%   split one-up-one-back 29.0%   both net 25.6%   both back 23.6%   points lost to positioning 43
-   wall play: rebounds played 2060 of 29849 shots (6.9%)   tactics chosen: corner-wall 22349 (won point 0.0%), por4 205 (won point 52.2%), bajada 69 (won point 0.0%), slice 347 (won point 0.0%), chiquita 655 (won point 0.0%), drive 345 (won point 0.0%), drop 1533 (won point 0.0%), recovery 345 (won point 0.0%), fallback 442 (won point 5.9%), bandeja 43 (won point 0.0%), smash 538 (won point 2.0%), lob 203 (won point 0.0%), vibora 4 (won point 0.0%)
-   invalid: NaN states 0   mean match length 336 s
+   stronger (hard) won 95/98 = 96.9%   95% CI [91%, 99%]   unfinished: 2
+   points 2298   rally 9.09 shots   aces 0.0%   double faults 0.0%   errors 90.8%   winners 9.2%   por-4 3.3%
+   points by reason: own-side 45.2%, net 32.1%, out 13.5%, bounce 5.9%, out-after-bounce 3.3%
+   errors by last shot (tactic/kind): lob/lob 687, drive/forehand 197, chiquita/chiquita 189, drive/volley 160, drop/chiquita 145, slice/slice 136, chiquita/drop 135, recovery/lob 113
+   errors by contact label: late 1295, poor 788, perfect 2, off-centre 2
+   teamwork: incoming balls 20926   clearly reachable ones the whole team ignored 58 (0.3%)   double commitments 0   overlap 0.7%   split one-up-one-back 14.2%   both net 34.0%   both back 32.5%   points lost to positioning 58
+   wall play: rebounds played 956 of 20926 shots (4.6%)   tactics chosen: lob 3188 (won point 0.0%), smash 2052 (won point 0.4%), drive 4938 (won point 0.7%), slice 1032 (won point 0.0%), drop 1790 (won point 0.0%), recovery 475 (won point 0.0%), por4 329 (won point 47.1%), chiquita 2920 (won point 0.0%), bajada 409 (won point 0.0%), fallback 554 (won point 1.8%), bandeja 664 (won point 0.0%), corner-wall 269 (won point 0.4%), vibora 7 (won point 0.0%)
+   invalid: NaN states 0   mean match length 296 s
 
 == hard:expert ==
-   stronger (expert) won 82/95 = 86.3%   95% CI [78%, 92%]   unfinished: 5
-   points 2824   rally 19.22 shots   aces 0.0%   double faults 0.0%   errors 96.1%   winners 3.9%   por-4 2.1%
-   points by reason: own-side 43.9%, net 40.9%, out 11.3%, out-after-bounce 2.1%, bounce 1.8%
-   errors by last shot (tactic/kind): corner-wall/forehand 754, corner-wall/backhand 574, corner-wall/slice 534, corner-wall/volley 345, slice/slice 136, drop/drop 86, drop/chiquita 76, chiquita/chiquita 36
-   teamwork: incoming balls 54348   clearly reachable ones the whole team ignored 25 (0.0%)   double commitments 0   overlap 0.2%   split one-up-one-back 29.8%   both net 28.0%   both back 20.1%   points lost to positioning 25
-   wall play: rebounds played 2750 of 54348 shots (5.1%)   tactics chosen: corner-wall 43341 (won point 0.0%), fallback 2660 (won point 1.3%), slice 907 (won point 0.0%), drive 466 (won point 0.2%), drop 2065 (won point 0.0%), recovery 147 (won point 0.0%), bajada 95 (won point 0.0%), lob 239 (won point 0.0%), bandeja 17 (won point 0.0%), por4 242 (won point 26.0%), smash 773 (won point 0.3%), chiquita 560 (won point 0.0%), vibora 5 (won point 0.0%)
-   invalid: NaN states 0   mean match length 433 s
+   stronger (expert) won 89/93 = 95.7%   95% CI [89%, 98%]   unfinished: 7
+   points 2643   rally 17.40 shots   aces 0.0%   double faults 0.0%   errors 77.3%   winners 22.7%   por-4 8.6%
+   points by reason: own-side 44.7%, net 23.5%, bounce 14.2%, out 9.0%, out-after-bounce 8.6%
+   errors by last shot (tactic/kind): lob/lob 412, slice/slice 305, chiquita/chiquita 277, chiquita/drop 185, drive/forehand 160, drive/volley 134, drive/backhand 101, recovery/lob 98
+   errors by contact label: poor 1053, late 986, clean 2, perfect 1
+   teamwork: incoming balls 46079   clearly reachable ones the whole team ignored 191 (0.4%)   double commitments 0   overlap 0.9%   split one-up-one-back 12.2%   both net 36.2%   both back 30.4%   points lost to positioning 191
+   wall play: rebounds played 2498 of 46079 shots (5.4%)   tactics chosen: slice 3599 (won point 0.0%), fallback 3522 (won point 3.0%), corner-wall 901 (won point 0.0%), chiquita 8403 (won point 0.0%), drive 10200 (won point 1.4%), recovery 848 (won point 0.0%), smash 4441 (won point 0.2%), bajada 1553 (won point 0.0%), lob 4804 (won point 0.0%), drop 3294 (won point 0.0%), bandeja 747 (won point 0.0%), por4 1095 (won point 31.4%), vibora 16 (won point 0.0%)
+   invalid: NaN states 0   mean match length 465 s
 
 == self:easy ==
-   points 3278   rally 5.52 shots   aces 0.0%   double faults 0.0%   errors 90.6%   winners 9.4%   por-4 4.9%
-   points by reason: own-side 44.3%, net 27.8%, out 18.4%, out-after-bounce 4.9%, bounce 4.5%
-   errors by last shot (tactic/kind): corner-wall/forehand 642, corner-wall/backhand 614, corner-wall/slice 354, drop/drop 304, recovery/lob 243, corner-wall/volley 216, chiquita/drop 121, slice/slice 110
-   teamwork: incoming balls 18084   clearly reachable ones the whole team ignored 110 (0.6%)   double commitments 0   overlap 0.9%   split one-up-one-back 18.2%   both net 17.7%   both back 37.0%   points lost to positioning 110
-   wall play: rebounds played 2541 of 18084 shots (14.1%)   tactics chosen: slice 405 (won point 0.0%), corner-wall 9318 (won point 0.3%), recovery 643 (won point 0.0%), drop 1231 (won point 0.0%), smash 1053 (won point 6.8%), bajada 220 (won point 0.0%), drive 363 (won point 0.0%), fallback 139 (won point 4.3%), por4 347 (won point 58.5%), chiquita 796 (won point 0.0%), lob 234 (won point 0.0%), bandeja 46 (won point 0.0%), vibora 11 (won point 0.0%)
-   invalid: NaN states 0   mean match length 349 s
+   points 3188   rally 5.64 shots   aces 0.0%   double faults 0.0%   errors 89.6%   winners 10.4%   por-4 4.8%
+   points by reason: own-side 46.7%, net 22.4%, out 20.5%, bounce 5.6%, out-after-bounce 4.8%
+   errors by last shot (tactic/kind): lob/lob 884, drop/drop 305, chiquita/chiquita 262, chiquita/drop 215, drive/forehand 213, drive/volley 209, drop/chiquita 171, recovery/lob 140
+   errors by contact label: late 1752, poor 1099, perfect 5, clean 1
+   teamwork: incoming balls 17998   clearly reachable ones the whole team ignored 112 (0.6%)   double commitments 0   overlap 0.8%   split one-up-one-back 13.5%   both net 31.7%   both back 35.2%   points lost to positioning 112
+   wall play: rebounds played 1164 of 17998 shots (6.5%)   tactics chosen: lob 2986 (won point 0.0%), smash 1462 (won point 3.9%), chiquita 2331 (won point 0.0%), por4 540 (won point 42.2%), bandeja 670 (won point 0.0%), drive 3402 (won point 0.7%), drop 1543 (won point 0.0%), fallback 352 (won point 4.5%), bajada 613 (won point 0.3%), recovery 400 (won point 0.0%), slice 303 (won point 0.0%), corner-wall 190 (won point 1.6%), vibora 16 (won point 0.0%)
+   invalid: NaN states 0   mean match length 368 s
 
 == self:normal ==
-   points 3178   rally 7.68 shots   aces 0.0%   double faults 0.0%   errors 93.1%   winners 6.9%   por-4 3.9%
-   points by reason: own-side 39.6%, net 37.3%, out 16.2%, out-after-bounce 3.9%, bounce 2.9%
-   errors by last shot (tactic/kind): corner-wall/forehand 701, corner-wall/backhand 573, corner-wall/slice 475, drop/drop 295, corner-wall/volley 265, recovery/lob 150, drop/chiquita 96, chiquita/drop 95
-   teamwork: incoming balls 24441   clearly reachable ones the whole team ignored 53 (0.2%)   double commitments 0   overlap 0.6%   split one-up-one-back 22.7%   both net 22.8%   both back 30.3%   points lost to positioning 53
-   wall play: rebounds played 2025 of 24441 shots (8.3%)   tactics chosen: corner-wall 15330 (won point 0.0%), drop 1665 (won point 0.0%), fallback 325 (won point 3.1%), lob 340 (won point 0.0%), smash 738 (won point 2.8%), slice 446 (won point 0.0%), chiquita 955 (won point 0.0%), drive 362 (won point 0.3%), por4 396 (won point 46.0%), recovery 485 (won point 0.0%), bajada 163 (won point 0.0%), bandeja 52 (won point 0.0%), vibora 5 (won point 0.0%)
-   invalid: NaN states 0   mean match length 356 s
+   points 3677   rally 6.95 shots   aces 0.0%   double faults 0.0%   errors 91.6%   winners 8.4%   por-4 3.7%
+   points by reason: own-side 44.9%, net 29.6%, out 17.1%, bounce 4.7%, out-after-bounce 3.7%
+   errors by last shot (tactic/kind): lob/lob 1183, drive/forehand 337, drive/volley 284, chiquita/chiquita 267, chiquita/drop 263, drop/drop 206, drop/chiquita 197, recovery/lob 159
+   errors by contact label: late 2135, poor 1227, perfect 3, clean 2
+   teamwork: incoming balls 25565   clearly reachable ones the whole team ignored 79 (0.3%)   double commitments 0   overlap 0.8%   split one-up-one-back 16.0%   both net 30.3%   both back 33.1%   points lost to positioning 79
+   wall play: rebounds played 1126 of 25565 shots (4.4%)   tactics chosen: slice 598 (won point 0.0%), drop 1968 (won point 0.0%), lob 4730 (won point 0.0%), bandeja 1130 (won point 0.0%), smash 2449 (won point 0.5%), drive 5456 (won point 0.5%), chiquita 3131 (won point 0.0%), recovery 558 (won point 0.0%), por4 574 (won point 44.1%), bajada 467 (won point 0.0%), fallback 606 (won point 2.8%), corner-wall 212 (won point 0.0%), vibora 9 (won point 0.0%)
+   invalid: NaN states 0   mean match length 424 s
 
 == self:hard ==
-   points 3519   rally 19.94 shots   aces 0.0%   double faults 0.0%   errors 97.2%   winners 2.8%   por-4 1.3%
-   points by reason: net 46.5%, own-side 37.5%, out 13.2%, bounce 1.5%, out-after-bounce 1.3%
-   errors by last shot (tactic/kind): corner-wall/forehand 948, corner-wall/backhand 694, corner-wall/volley 663, corner-wall/slice 597, drop/drop 149, slice/slice 118, drop/chiquita 85, chiquita/chiquita 43
-   teamwork: incoming balls 70201   clearly reachable ones the whole team ignored 32 (0.0%)   double commitments 0   overlap 0.1%   split one-up-one-back 39.3%   both net 18.2%   both back 18.5%   points lost to positioning 32
-   wall play: rebounds played 3100 of 70201 shots (4.4%)   tactics chosen: corner-wall 59961 (won point 0.0%), drop 2448 (won point 0.0%), drive 430 (won point 0.0%), fallback 1234 (won point 1.9%), chiquita 593 (won point 0.0%), smash 707 (won point 0.6%), recovery 120 (won point 0.0%), bandeja 14 (won point 0.0%), por4 201 (won point 29.9%), bajada 69 (won point 0.0%), slice 697 (won point 0.0%), lob 201 (won point 0.0%), vibora 1 (won point 0.0%)
-   invalid: NaN states 0   mean match length 509 s
+   points 3404   rally 14.63 shots   aces 0.0%   double faults 0.0%   errors 82.9%   winners 17.1%   por-4 6.1%
+   points by reason: own-side 45.8%, net 27.4%, bounce 11.0%, out 9.7%, out-after-bounce 6.1%
+   errors by last shot (tactic/kind): lob/lob 658, slice/slice 344, chiquita/chiquita 294, drive/forehand 284, drive/volley 242, chiquita/drop 216, drive/backhand 147, recovery/lob 144
+   errors by contact label: late 1431, poor 1382, perfect 5, clean 4
+   teamwork: incoming balls 49850   clearly reachable ones the whole team ignored 188 (0.4%)   double commitments 0   overlap 0.9%   split one-up-one-back 12.7%   both net 35.2%   both back 31.8%   points lost to positioning 188
+   wall play: rebounds played 2896 of 49850 shots (5.8%)   tactics chosen: slice 3395 (won point 0.0%), drive 12618 (won point 1.1%), lob 5854 (won point 0.0%), smash 4866 (won point 0.2%), drop 3946 (won point 0.0%), chiquita 7719 (won point 0.0%), bajada 1650 (won point 0.0%), fallback 2500 (won point 1.6%), corner-wall 812 (won point 0.0%), recovery 1116 (won point 0.0%), por4 971 (won point 40.3%), bandeja 968 (won point 0.0%), vibora 22 (won point 0.0%)
+   invalid: NaN states 0   mean match length 554 s
 
 == self:expert ==
-   points 3305   rally 22.34 shots   aces 0.1%   double faults 0.0%   errors 95.8%   winners 4.2%   por-4 1.7%
-   points by reason: own-side 45.9%, net 38.0%, out 11.8%, bounce 2.5%, out-after-bounce 1.7%
-   errors by last shot (tactic/kind): corner-wall/forehand 833, corner-wall/backhand 693, corner-wall/slice 670, corner-wall/volley 421, slice/slice 150, drop/chiquita 82, drop/drop 76, lob/lob 42
-   teamwork: incoming balls 73994   clearly reachable ones the whole team ignored 33 (0.0%)   double commitments 0   overlap 0.1%   split one-up-one-back 31.1%   both net 23.0%   both back 22.2%   points lost to positioning 33
-   wall play: rebounds played 3770 of 73994 shots (5.1%)   tactics chosen: corner-wall 58876 (won point 0.0%), fallback 4546 (won point 0.6%), drop 2435 (won point 0.0%), slice 1213 (won point 0.0%), lob 306 (won point 0.0%), smash 1295 (won point 0.2%), chiquita 590 (won point 0.0%), recovery 174 (won point 0.0%), por4 376 (won point 23.7%), drive 694 (won point 0.7%), bajada 146 (won point 0.0%), bandeja 23 (won point 0.0%), vibora 5 (won point 0.0%)
-   invalid: NaN states 0   mean match length 534 s
+   points 3046   rally 21.39 shots   aces 0.2%   double faults 0.0%   errors 66.2%   winners 33.8%   por-4 12.1%
+   points by reason: own-side 38.9%, bounce 21.7%, net 19.2%, out-after-bounce 12.1%, out 8.1%
+   errors by last shot (tactic/kind): lob/lob 370, slice/slice 366, chiquita/chiquita 322, chiquita/drop 187, recovery/lob 119, drive/forehand 111, drive/volley 110, drive/backhand 98
+   errors by contact label: poor 1256, late 756, clean 2, perfect 1, stretched 1
+   teamwork: incoming balls 65412   clearly reachable ones the whole team ignored 337 (0.5%)   double commitments 0   overlap 1.0%   split one-up-one-back 11.8%   both net 38.2%   both back 29.3%   points lost to positioning 337
+   wall play: rebounds played 4135 of 65412 shots (6.3%)   tactics chosen: slice 5915 (won point 0.0%), fallback 7136 (won point 3.3%), drive 12317 (won point 2.3%), recovery 1570 (won point 0.0%), smash 5748 (won point 0.1%), drop 4023 (won point 0.0%), chiquita 13700 (won point 0.0%), bandeja 848 (won point 0.0%), por4 1889 (won point 26.4%), lob 5438 (won point 0.0%), corner-wall 1315 (won point 0.1%), bajada 2409 (won point 0.0%), vibora 12 (won point 0.0%)
+   invalid: NaN states 0   mean match length 612 s

@@ -55,7 +55,7 @@ Legend: ✅ done and tested · 🟡 partly done · ❌ not started
 - ✅ `render.yaml` targets Render's Frankfurt (EU) region. A service's region cannot be changed once created: recreate the service from the Blueprint.
 
 ## Tests
-- 97 automated tests: scoring, rules, physics/spin, contact model, singles, career v2 (brackets, migration, rewards), drills, input, looks/courts, 4 real WebSocket clients.
+- 184 automated tests (npm test, 0 failures, last full run 2026-10-28): scoring, rules, physics/spin, contact model, singles, career v2 (brackets, migration, rewards), drills, input, looks/courts, 4 real WebSocket clients.
 - Manually checked in the in-app browser: menu, equipment screen, the three courts (menu background), a night-arena practice match.
 - NOT checked: gamepad, audio, a real 4-human session, mobile, performance on low-end GPUs.
 
@@ -135,3 +135,25 @@ Method: a simulation harness measured how bot pairs really move and why they los
 ## Ball glitch and bundles (latest pass)
 - ✅ Ball: measured the rendered ball frame by frame in a real-time local match: the only anomalies were the ball teleporting 5-9 m to the server's hand between points (and after a fault). It now pops in at the hand (0 to 1 with a small overshoot, trail cleared, no streak) instead of jumping in view
 - ✅ `node bundle.cjs` writes `bundles/PADEL_CLUB_FULL_CODE.txt` (everything: briefing, status, all source, tests) and `bundles/PADEL_CLUB_CORE.txt` (documents + game logic + server + client game loop) to give to an AI that cannot read the repository
+
+## 3.0 overhaul: realism, tactical AI, validation (status by class)
+Classes: IMPLEMENTED / AUTO-TESTED / MANUALLY VERIFIED (a person, or me in the real browser) / PARTIAL / NOT IMPLEMENTED. Older lines marked ✅ above mean implemented and (unless stated) unit-tested, NOT judged by a person. Details and numbers: `docs/OVERHAUL_REPORT.md`.
+
+| Item | Implemented | Auto-tested | Manually verified | Notes |
+|---|---|---|---|---|
+| Physical drag, 4 sub-steps, swept floor contact | yes | calibration, regression | no | padel-ball Cd is an estimate from tennis data |
+| Calibration harness + report | yes | calibration | n/a | `npm run calibrate`, docs/CALIBRATION.md |
+| Tactical shot evaluator (real-physics flight, planner-verified) | yes | tactics | no | wall play is 4-6% of shots |
+| Shared team plan with ownership | yes | teamwork | no | measured 0 double commitments |
+| Fair difficulty (skill numbers only) | yes | bot-fairness | no | |
+| Contact analysis and feedback labels | yes | contact-analysis | impact flash seen once | animation vs authoritative hit NOT fixed (docs/CONTACT.md) |
+| Geometry / off-court (1000 trajectories) | yes | geometry | no | doors never walked by a person |
+| Diagnostics overlay (F2/F3/F4, [ ]) | yes | diagnostics | rendered once in browser | read-only, solo stepping only |
+| Server benchmarks | yes | n/a | n/a | one machine, no real network; Render capacity NOT established |
+| Camera audit + docs | yes | n/a | audit of 5 presets + 1 screenshot | broadcast, tactical, custom NOT audited |
+| Audio event mapping | yes | audio | no | nobody has listened to the sounds |
+| Career e2e (3 seasons, scripted) | yes | career-e2e | no | not replayed by hand |
+| Regression tests | yes | regression | n/a | |
+| Bot aces / double faults | no | | | essentially 0% |
+| Animation re-timed to the authoritative contact | no | | | |
+| Mobile / low-end GPU / physical gamepad / 4 humans | no | | | not tested |
