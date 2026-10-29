@@ -153,7 +153,7 @@ export function skinFollow(pl) {
   const dHead = delta(pl.head, REST.head); put(B.neck, part(dHead, 0.4)); put(B.head, part(dHead, 0.6));
   for (const S of ['R', 'L']) {
     const arm = S === 'R' ? pl.armR : pl.armL, leg = S === 'R' ? pl.legR : pl.legL;
-    const dSh = part(delta(arm.sh, REST['sh' + S]), damp[S]), dCl = part(dSh, 0.25);
+    const dSh = part(delta(arm.sh, REST['sh' + S]), damp[S]), dCl = part(dSh, 0.4);
     put(B['cl' + S], dCl);
     put(B['sh' + S], dCl.clone().invert().multiply(dSh));
     put(B['el' + S], part(delta(arm.elbow, REST['el' + S]), damp[S]));

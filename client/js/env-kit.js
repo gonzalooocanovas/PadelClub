@@ -164,12 +164,12 @@ export function spectators(ctx, group, seats, { occupancy = 0.7, palette, rand =
   const pal = palette || [0x1c2433, 0x2c3a52, 0x55606e, 0xb8bcc4, 0xe8e6e0, 0x6b2a2a, 0x2a4a46, 0x3d3a55, 0x8f7a58, 0x161a22, 0x9c3a34, 0xd9c37a];
   const skins = [0xf0c8a6, 0xd9a47c, 0xb97d56, 0x8d5a3c, 0x6a4129, 0xf6d9c0];
   const hair = [0x15110d, 0x2a1d12, 0x4a3320, 0x6b4a2a, 0xa88858, 0xb8b8b8, 0x0b0b0b];
-  const torso = new THREE.CapsuleGeometry(0.17, 0.2, 3, 8); T(torso, 0, 0.78, 0); torso.scale(1, 1, 0.78);
-  const armL = new THREE.CapsuleGeometry(0.05, 0.28, 2, 6); T(armL, -0.22, 0.72, 0.03);
+  const torso = new THREE.CapsuleGeometry(0.17, 0.2, 2, 6); T(torso, 0, 0.78, 0); torso.scale(1, 1, 0.78);
+  const armL = new THREE.CapsuleGeometry(0.05, 0.28, 1, 4); T(armL, -0.22, 0.72, 0.03);
   const armR = armL.clone(); armR.translate(0.44, 0, 0);
   const body = merge([prep(torso, 0xffffff), prep(armL, 0xffffff), prep(armR, 0xffffff)]);
-  const hg = new THREE.SphereGeometry(0.105, 10, 8); hg.scale(0.92, 1.08, 1); T(hg, 0, 1.2, 0);
-  const cap = new THREE.SphereGeometry(0.112, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.5); cap.scale(0.95, 1, 1.02); T(cap, 0, 1.22, -0.005);
+  const hg = new THREE.SphereGeometry(0.105, 8, 6); hg.scale(0.92, 1.08, 1); T(hg, 0, 1.2, 0);
+  const cap = new THREE.SphereGeometry(0.112, 8, 4, 0, Math.PI * 2, 0, Math.PI * 0.5); cap.scale(0.95, 1, 1.02); T(cap, 0, 1.22, -0.005);
   const head = merge([prep(hg, 0xffffff), prep(cap, 0xffffff)]);
   const chosen = seats.filter(() => rand() < occupancy);
   const mk = (geo, n) => new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ roughness: 0.85, vertexColors: true }), n);
