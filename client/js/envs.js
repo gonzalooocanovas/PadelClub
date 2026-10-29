@@ -5,6 +5,7 @@
 
 import * as THREE from 'three';
 import { nightArena, mediterraneanClub } from './envs-pro.js';
+import { indoorClub, rooftopSunset } from './envs-pro2.js';
 
 const std = (color, rough = 0.85, metal = 0) => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
 const basic = (color) => new THREE.MeshBasicMaterial({ color });
@@ -262,8 +263,8 @@ function rooftop(ctx) {
 
 // 'outdoor' is the Mediterranean Club and 'night' the Night Arena (envs-pro.js). The earlier simple versions stay as a fallback: if the
 // art-directed builder throws, the old one is used and the error is logged.
-const LEGACY = { outdoor, night };
-export const ENVIRONMENTS = { indoor, outdoor: mediterraneanClub, night: nightArena, rooftop };
+const LEGACY = { outdoor, night, indoor, rooftop };
+export const ENVIRONMENTS = { indoor: indoorClub, outdoor: mediterraneanClub, night: nightArena, rooftop: rooftopSunset };
 export function buildEnvironment(id, ctx) {
   try { return (ENVIRONMENTS[id] || indoor)(ctx); } catch (err) {
     console.error('[environment] failed to build', id, err);

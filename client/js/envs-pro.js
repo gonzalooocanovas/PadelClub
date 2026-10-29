@@ -9,12 +9,12 @@ import {
   floodlightMast, lensMesh,
 } from './env-kit.js';
 
-const basic = (color, extra = {}) => new THREE.MeshBasicMaterial({ color, ...extra });
-const mesh = (geo, mat, x = 0, y = 0, z = 0, cast = false) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; return m; };
-const box = (mat, w, h, d, x, y, z, cast = false) => mesh(new THREE.BoxGeometry(w, h, d), mat, x, y, z, cast);
+export const basic = (color, extra = {}) => new THREE.MeshBasicMaterial({ color, ...extra });
+export const mesh = (geo, mat, x = 0, y = 0, z = 0, cast = false) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = cast; m.receiveShadow = true; return m; };
+export const box = (mat, w, h, d, x, y, z, cast = false) => mesh(new THREE.BoxGeometry(w, h, d), mat, x, y, z, cast);
 
 /** Distant ring of venue silhouettes with sparse warm windows and a few aviation lights. Everything is merged or instanced. */
-function skyline(group, { seed, rIn, rOut, count, color, windows = 260 }) {
+export function skyline(group, { seed, rIn, rOut, count, color, windows = 260 }) {
   const rand = rng(seed), parts = [], win = [];
   for (let i = 0; i < count; i++) {
     const a = rand() * Math.PI * 2, r = rIn + rand() * (rOut - rIn), w = 6 + rand() * 14, d = 6 + rand() * 12, h = 6 + Math.pow(rand(), 1.8) * 40;

@@ -46,3 +46,8 @@ Both environments, in the running game, from the player, broadcast, corner, side
 - Spectators are static silhouettes (they hop when the crowd cheers; no other animation). The tournament display is a static graphic.
 - Only the sun casts shadows (the floodlights and washers do not); pergola and tree shadows exist in the Mediterranean club but were not judged closely.
 - The clubhouse upper floor and roof are mostly out of frame from the player camera.
+
+## 8. The two remaining courts (`client/js/envs-pro2.js`)
+- **Premium Indoor Club** (`indoor`): a hall with a far wall of merged timber acoustic slats between dark piers and a lit club logo, a glass curtain wall on the left with bronze mullions, dusk sky and stone planters with shrubs, a lounge mezzanine on the right (glass balustrade, low seating in warm colours, a few guests), a ceiling with trusses every 5 m, timber baffles and five long LED lines, hanging banners, polished-concrete surround, two soft spot lights and one shadow-casting key light.
+- **Sunset Rooftop** (`rooftop`): a roof slab with a glass balustrade and steel rail, timber deck either side of the court, lounge sofas and low tables, planters with small olive trees, ornamental grasses along the rail, a water tank and antenna masts with red lights, string lights on slim poles (bulbs instanced), a layered dusk skyline of 120 distant towers with about 900 warm windows, a low sun with glow, a pink-to-gold sky.
+- Wired like the others (`envs.js` falls back to the old builders if the new ones throw). Seen in the running game from the player and broadcast cameras only; not measured separately, not judged from the other cameras, and the rooftop court reads a little darker under the warm light than the others.

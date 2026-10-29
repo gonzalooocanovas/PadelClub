@@ -932,6 +932,7 @@ if (swinging) {
     om.map?.dispose(); om.map = null;
     om.color.set(t.out.color); om.roughness = t.out.rough;
     if (t.out.paving) { om.color.set(0xffffff); om.map = pavingTex([10, 10]); }
+    if (t.out.map) { om.color.set(0xffffff); om.map = t.out.map; }
     if (t.out.tiles) {
       om.color.set(0xffffff);
       om.map = canvasTex(256, 256, (g, w, h) => {
