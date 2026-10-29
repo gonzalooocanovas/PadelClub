@@ -4,6 +4,7 @@
 // All dimensions are metres, the court occupies x in [-5, 5], z in [-10, 10].
 
 import * as THREE from 'three';
+import { nightArena, mediterraneanClub } from './envs-pro.js';
 
 const std = (color, rough = 0.85, metal = 0) => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal });
 const basic = (color) => new THREE.MeshBasicMaterial({ color });
@@ -259,5 +260,13 @@ function rooftop(ctx) {
   };
 }
 
-export const ENVIRONMENTS = { indoor, outdoor, night, rooftop };
-export function buildEnvironment(id, ctx) { return (ENVIRONMENTS[id] || indoor)(ctx); }
+// 'outdoor' is the Mediterranean Club and 'night' the Night Arena (envs-pro.js). The earlier simple versions stay as a fallback: if the
+// art-directed builder throws, the old one is used and the error is logged.
+const LEGACY = { outdoor, night };
+export const ENVIRONMENTS = { indoor, outdoor: mediterraneanClub, night: nightArena, rooftop };
+export function buildEnvironment(id, ctx) {
+  try { return (ENVIRONMENTS[id] || indoor)(ctx); } catch (err) {
+    console.error('[environment] failed to build', id, err);
+    return (LEGACY[id] || indoor)(ctx);
+  }
+}

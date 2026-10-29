@@ -13,6 +13,7 @@ import { restPose, captureRest } from './skin.js';
 import { newAnim, stepAnim, animLabel } from './anim-state.js';
 import { settings, onSetting } from './settings.js';
 import { buildEnvironment } from './envs.js';
+import { disposeGroup, pavingTex } from './env-kit.js';
 import { netHeight } from '/shared/physics.js';
 
 const TEAM_COLORS = [0xf2f5f8, 0x3d78c4]; // team A white, team B blue
@@ -39,6 +40,8 @@ function turfTexture(base = '#2b5f94') {
       g.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,.035)' : 'rgba(0,0,0,.06)';
       g.fillRect(x, y, 2, 2);
     }
+    for (let i = 0; i < 26; i++) { const gx = g.createRadialGradient(0, 0, 0, 0, 0, 1); g.save(); g.translate(Math.random() * W, [H * 0.18, H * 0.82, H * 0.5][i % 3] + (Math.random() - 0.5) * 300); g.scale(60 + Math.random() * 150, 40 + Math.random() * 90); gx.addColorStop(0, 'rgba(0,0,0,0.045)'); gx.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gx; g.beginPath(); g.arc(0, 0, 1, 0, 6.3); g.fill(); g.restore(); } // wear near the baselines and the net
+    for (let i = 0; i < 40000; i++) { g.fillStyle = Math.random() < 0.5 ? 'rgba(255,240,200,.05)' : 'rgba(10,20,40,.07)'; g.fillRect(Math.random() * W, Math.random() * H, 1, 1 + Math.random() * 3); } // sand infill and fibres
     for (let y = 0; y < H; y += 128) { // mowing stripes
       g.fillStyle = (y / 128) % 2 ? 'rgba(255,255,255,.018)' : 'rgba(0,0,0,.02)';
       g.fillRect(0, y, W, 128);
@@ -189,8 +192,9 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
     turf.material.bumpMap = bump; turf.material.bumpScale = 0.6;
     s.add(turf);
     this.turfMesh = turf;
-    const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xaecde6, transparent: true, opacity: 0.13, roughness: 0.05, metalness: 0, side: THREE.DoubleSide, depthWrite: false });
-    const steel = new THREE.MeshStandardMaterial({ color: 0x9aa7b8, metalness: 0.7, roughness: 0.4 });
+    const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xaecde6, transparent: true, opacity: 0.13, roughness: 0.04, metalness: 0, envMapIntensity: 1.6, specularIntensity: 1, side: THREE.DoubleSide, depthWrite: false });
+    const steel = new THREE.MeshStandardMaterial({ color: 0x9aa7b8, metalness: 0.6, roughness: 0.42 });
+    this.steelMat = steel;
     const mt = meshTexture();
     const meshMat = (w, h) => {
       const t = mt.clone(); t.needsUpdate = true; t.repeat.set(w / 0.12, h / 0.12); t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -269,6 +273,14 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
       for (const sx of [-1, 1]) for (const zz of [6, 8, 10]) seam(sx * 4.99, sz * zz);
       rail(10, 0, 0.04, sz * 10, 0);
     }
+
+    // glass clamps: thin steel plates at the side-wall panel seams only (the near back wall is hidden by the camera logic, and loose
+    // clamps would be left floating there), two heights, one InstancedMesh
+    { const spots = [];
+      for (const sz of [-1, 1]) for (const sx of [-1, 1]) for (const zz of [6, 8, 10]) spots.push([sx * 4.97, sz * zz]);
+      const clamp = new THREE.InstancedMesh(new THREE.BoxGeometry(0.03, 0.09, 0.05), seamMat, spots.length * 2), m4 = new THREE.Matrix4(); let i = 0;
+      for (const [x, z] of spots) for (const y of [0.45, 2.55]) { m4.makeTranslation(x, y, z); clamp.setMatrixAt(i++, m4); }
+      clamp.castShadow = false; s.add(clamp); }
 
     // 1v1: the side walls become solid glass all along
     this.singlesGlass = new THREE.Group();
@@ -852,10 +864,12 @@ if (swinging) {
     const m4 = new THREE.Matrix4();
     const amp = Math.max(0, Math.min(1, this.cheerT)) * 0.18;
     for (const c of this.crowds) {
+      const sv = new THREE.Vector3(1, 1, 1);
       c.people.forEach(([x, y, z, ry], i) => {
-        const hop = Math.abs(Math.sin(this.clock * 9 + c.phase[i])) * amp;
-        m4.makeRotationY(ry).setPosition(x, y + hop, z); c.bm.setMatrixAt(i, m4);
-        m4.setPosition(x, y + 0.36 + hop, z); c.hm.setMatrixAt(i, m4);
+        const hop = Math.abs(Math.sin(this.clock * 9 + c.phase[i])) * amp, sc = c.scales ? c.scales[i] : 1;
+        sv.set(sc, sc, sc);
+        m4.compose(new THREE.Vector3(x, y + hop, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry), sv); c.bm.setMatrixAt(i, m4);
+        m4.compose(new THREE.Vector3(x, y + (c.headOffset ?? 0.36) + hop, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry), sv); c.hm.setMatrixAt(i, m4);
       });
       c.bm.instanceMatrix.needsUpdate = true; c.hm.instanceMatrix.needsUpdate = true;
     }
@@ -885,8 +899,9 @@ if (swinging) {
     this.courtId = id;
     if (this.envGroup) {
       this.scene.remove(this.envGroup);
-      this.envGroup.traverse((o) => { o.geometry?.dispose(); (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { if (m) { m.map?.dispose(); m.dispose(); } }); });
+      disposeGroup(this.envGroup);
     }
+    if (this.envCustom) { this.envCustom.dispose(); this.envCustom = null; }
     this.crowds = [];
     const env = buildEnvironment(id, this);
     this.envGroup = env.group;
@@ -902,7 +917,10 @@ if (swinging) {
     this.hemi.color.set(l.hemi[0]); this.hemi.groundColor.set(l.hemi[1]); this.hemi.intensity = l.hemi[2];
     this.sun.color.set(l.sun.color); this.sun.intensity = l.sun.intensity; this.sun.position.set(...l.sun.pos);
     this.renderer.toneMappingExposure = l.exposure;
+    if (this.steelMat) { this.steelMat.color.set(l.frame ?? 0x9aa7b8); this.steelMat.metalness = l.frameMetal ?? 0.6; this.steelMat.roughness = l.frameRough ?? 0.42; }
     this.scene.environmentIntensity = l.envIntensity;
+    // an environment may bring its own reflection map (the night arena: dark dome with four bright floodlight rectangles)
+    if (l.envTexture) { this.scene.environment = l.envTexture; this.envCustom = l.envTexture; } else if (this.defaultEnv) this.scene.environment = this.defaultEnv;
   }
 
   setTurf(t) {
@@ -913,6 +931,7 @@ if (swinging) {
     const om = this.outFloor.material;
     om.map?.dispose(); om.map = null;
     om.color.set(t.out.color); om.roughness = t.out.rough;
+    if (t.out.paving) { om.color.set(0xffffff); om.map = pavingTex([10, 10]); }
     if (t.out.tiles) {
       om.color.set(0xffffff);
       om.map = canvasTex(256, 256, (g, w, h) => {
@@ -939,7 +958,8 @@ if (swinging) {
 
   buildEnv() {
     const pm = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.defaultEnv = pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environment = this.defaultEnv;
     this.scene.environmentIntensity = 0.32;
     pm.dispose();
   }
