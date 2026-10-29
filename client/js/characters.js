@@ -349,7 +349,7 @@ export function buildCharacter(look, team) {
 
 /** Free all GPU resources of a character (used when looks change). */
 export function disposeCharacter(rig) {
-  if (rig.statue) { rig.markMat.dispose(); rig.root.traverse((o) => { if (o.material && o.material !== blob.mat && o.material !== rig.markMat) o.material.dispose(); }); return; } // geometry and textures belong to the shared loaded model
+  if (rig.statue) { rig.markMat.dispose(); return; } // geometry, materials and textures belong to the shared loaded model
   rig.root.traverse((o) => {
     if (o.geometry && o.geometry !== blob.geo) o.geometry.dispose();
     if (o.material && o.material !== blob.mat) { (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.map?.dispose(); m.alphaMap?.dispose(); m.dispose(); }); }

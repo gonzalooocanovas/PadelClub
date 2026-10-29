@@ -1,8 +1,7 @@
-// Procedural skinning for the scanned player models. The models are single rigid meshes captured in ONE pose each, so a skeleton is
-// built in code from joint positions measured on each model (JOINTS, in model units, y up, +z forward, +x the player's left), every
-// vertex is weighted to the nearest bones (then smoothed along the mesh), and the mesh is re-posed into the neutral ready stance the
-// animation starts from. scene.js keeps animating a set of placeholder joints with its usual pose maths; skinFollow() converts the
-// difference between that pose and the ready stance into bone rotations, so the model can take any pose the animation can.
+// Skeleton control for the owner's rigged character (output_mesh_pbr_rigged_fixed.glb). scene.js keeps animating a set of placeholder
+// joints with its usual pose maths; skinFollow() converts the difference between that pose and the neutral standing pose into bone
+// rotations of the real skeleton, so the mesh deforms through its skin weights. The neutral pose is computed from the bind positions
+// of the file's own bones. Model units are metres, y up, +z forward, +x the player's left.
 import * as THREE from 'three';
 
 const V = (a) => new THREE.Vector3(...a);
@@ -13,8 +12,8 @@ export const JOINTS = {
     pelvis: [0, 0.0, -0.02], neck: [0, 0.63, 0.0], headC: [0, 0.82, 0.02], headTop: [0, 0.95, 0.0],
     shR: [-0.2, 0.55, 0], elR: [-0.27, 0.31, -0.01], wrR: [-0.375, 0.085, 0.0], racket: [-0.41, -0.14, 0.0], handL: [0.425, -0.14, 0.0],
     shL: [0.2, 0.55, 0], elL: [0.28, 0.31, -0.01], wrL: [0.39, 0.07, 0.0],
-    hipR: [-0.105, -0.08, -0.02], knR: [-0.13, -0.43, 0.03], anR: [-0.155, -0.8, -0.02], toR: [-0.16, -0.92, 0.2],
-    hipL: [0.105, -0.08, -0.02], knL: [0.13, -0.43, 0.03], anL: [0.15, -0.8, -0.02], toL: [0.16, -0.92, 0.2],
+    hipR: [-0.105, -0.08, -0.02], knR: [-0.13, -0.43, 0.03], anR: [-0.155, -0.8, -0.02], toR: [-0.16, -0.94, 0.2],
+    hipL: [0.105, -0.08, -0.02], knL: [0.13, -0.43, 0.03], anL: [0.15, -0.8, -0.02], toL: [0.16, -0.94, 0.2],
     upR: [0, 1, 0.1], upL: [0, 1, 0.1],
     torsoR: 0.17, rs: 0.85, spread: 0.05, armAbduct: 0.12, floorAnkle: -0.8,
   },
@@ -32,109 +31,6 @@ const TREE = [
   ['thR', 'pelvis', 'hipR'], ['knR', 'thR', 'knR'], ['ftR', 'knR', 'anR'],
   ['thL', 'pelvis', 'hipL'], ['knL', 'thL', 'knL'], ['ftL', 'knL', 'anL'],
 ];
-
-function points(J) {
-  const p = {}; for (const k in J) if (Array.isArray(J[k])) p[k] = V(J[k]);
-  for (const k of ['upR', 'upL']) p[k].normalize();
-  p.spinePivot = p.pelvis.clone().lerp(p.neck, 0.2);
-  p.chestPivot = p.pelvis.clone().lerp(p.neck, 0.55);
-  p.headPivot = p.neck.clone().lerp(p.headC, 0.5);
-  p.clPivR = p.neck.clone().lerp(p.shR, 0.3); p.clPivL = p.neck.clone().lerp(p.shL, 0.3);
-  if (!p.handL) p.handL = p.wrL.clone().addScaledVector(p.wrL.clone().sub(p.elL), 0.4);
-  return p;
-}
-
-// capsules that claim vertices for each bone: [bone, from, to, radius]
-function capsules(J, p) {
-  const t = J.torsoR, L = (a, b, f) => a.clone().lerp(b, f), k = J.rs || 1;
-  const caps = [
-    ['pelvis', p.pelvis, L(p.pelvis, p.neck, 0.2), t * 0.95],
-    ['spine', L(p.pelvis, p.neck, 0.2), L(p.pelvis, p.neck, 0.55), t],
-    ['chest', L(p.pelvis, p.neck, 0.55), L(p.pelvis, p.neck, 0.95), t],
-    ['neck', p.neck, L(p.neck, p.headC, 0.5), 0.06],
-    ['head', L(p.neck, p.headC, 0.55), p.headTop, 0.11],
-    ['clR', p.clPivR, p.shR, 0.05], ['shR', p.shR, p.elR, 0.055], ['elR', p.elR, p.wrR, 0.048], ['rk', p.wrR, p.racket, 0.1],
-    ['clL', p.clPivL, p.shL, 0.05], ['shL', p.shL, p.elL, 0.055], ['elL', p.elL, p.wrL, 0.048], ['haL', p.wrL, p.handL, 0.06],
-    ['thR', p.hipR, p.knR, 0.1], ['knR', p.knR, p.anR, 0.065], ['ftR', p.anR, p.toR, 0.06],
-    ['thL', p.hipL, p.knL, 0.1], ['knL', p.knL, p.anL, 0.065], ['ftL', p.anL, p.toL, 0.06],
-  ];
-  // limbs and head scale with the model; the torso radius is given directly
-  return caps.map(([b, a, c, r]) => [b, a, c, ['pelvis', 'spine', 'chest'].includes(b) ? r : r * k]);
-}
-
-const seg = (p, a, b) => {
-  const ab = b.clone().sub(a), t = Math.max(0, Math.min(1, p.clone().sub(a).dot(ab) / Math.max(ab.lengthSq(), 1e-9)));
-  return p.distanceTo(a.clone().addScaledVector(ab, t));
-};
-
-const skinned = {}; // kind -> geometry carrying skinIndex / skinWeight
-
-/**
- * Add bone weights to the geometry of a loaded model (once per kind): nearest-capsule weights, then smoothed along the mesh edges so
- * the transitions are soft and isolated mistakes disappear. Vertices at the same position (texture seams) share their weights.
- */
-export function skinGeometry(kind, geo) {
-  if (skinned[kind]) return skinned[kind];
-  const J = JOINTS[kind], p = points(J), caps = capsules(J, p);
-  const names = TREE.map((t) => t[0]), B = names.length, idx = Object.fromEntries(names.map((n, i) => [n, i]));
-  const pos = geo.attributes.position, n = pos.count;
-  const canon = new Int32Array(n), seen = new Map();
-  for (let i = 0; i < n; i++) {
-    const key = Math.round(pos.getX(i) * 2e4) + ',' + Math.round(pos.getY(i) * 2e4) + ',' + Math.round(pos.getZ(i) * 2e4);
-    const c = seen.get(key);
-    if (c === undefined) { seen.set(key, i); canon[i] = i; } else canon[i] = c;
-  }
-  let W = new Float32Array(n * B);
-  const v = new THREE.Vector3(), score = new Float32Array(B), K = 3.2;
-  for (let i = 0; i < n; i++) {
-    if (canon[i] !== i) continue;
-    v.fromBufferAttribute(pos, i); score.fill(Infinity);
-    for (const [b, a, c, r] of caps) { const d = seg(v, a, c) / r; if (d < score[idx[b]]) score[idx[b]] = d; }
-    let min = Infinity; for (const x of score) if (x < min) min = x;
-    let sum = 0; for (let j = 0; j < B; j++) { const e = Math.exp(-K * (score[j] - min)); W[i * B + j] = e; sum += e; }
-    for (let j = 0; j < B; j++) W[i * B + j] /= sum;
-  }
-  // mesh adjacency on the welded vertices
-  const adj = Array.from({ length: n }, () => new Set()), ix = geo.index, tri = (ix ? ix.count : n) / 3;
-  const vi = (k) => canon[ix ? ix.getX(k) : k];
-  for (let t = 0; t < tri; t++) {
-    const a = vi(t * 3), b = vi(t * 3 + 1), c = vi(t * 3 + 2);
-    adj[a].add(b).add(c); adj[b].add(a).add(c); adj[c].add(a).add(b);
-  }
-  for (let it = 0; it < 6; it++) {
-    const N = new Float32Array(n * B);
-    for (let i = 0; i < n; i++) {
-      if (canon[i] !== i) continue;
-      const nb = adj[i];
-      for (let j = 0; j < B; j++) {
-        if (!nb.size) { N[i * B + j] = W[i * B + j]; continue; }
-        let m = 0; for (const o of nb) m += W[o * B + j];
-        N[i * B + j] = 0.5 * W[i * B + j] + 0.5 * (m / nb.size);
-      }
-    }
-    W = N;
-  }
-  const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
-  for (let i = 0; i < n; i++) {
-    const c = canon[i], order = Array.from({ length: B }, (_, j) => j).sort((x, y) => W[c * B + y] - W[c * B + x]).slice(0, 4);
-    let sum = 0; for (const j of order) sum += W[c * B + j];
-    for (let k = 0; k < 4; k++) { si[i * 4 + k] = order[k]; sw[i * 4 + k] = W[c * B + order[k]] / sum; }
-  }
-  const g = geo.clone();
-  if (J.cutHands && ix) {
-    const dom = (k) => si[canon[ix.getX(k)] * 4], hand = new Set([idx.haL]), own = new Set([idx.haL, idx.elL, idx.shL]);
-    const keep = [];
-    for (let t = 0; t < tri; t++) {
-      const d = [dom(t * 3), dom(t * 3 + 1), dom(t * 3 + 2)];
-      if (d.some((x) => hand.has(x)) && d.some((x) => !own.has(x))) continue;
-      keep.push(ix.getX(t * 3), ix.getX(t * 3 + 1), ix.getX(t * 3 + 2));
-    }
-    g.setIndex(keep);
-  }
-  g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
-  g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
-  return (skinned[kind] = g);
-}
 
 const E = (x, y, z, o = 'XYZ') => new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z, o));
 // the neutral pose: standing straight, arms hanging, legs straight. Every pose scene.js computes (ready stance, swings, run) is a rotation away from it
@@ -194,22 +90,40 @@ function bakeBase(p, spread, keepArms, abduct, floorAnkle) {
   return { base, baseWorld: Wd.rk, offset: new THREE.Vector3(-mid.x, floorAnkle - mid.y, -mid.z) };
 }
 
-/** A fresh skeleton in the bind pose. Returns the bones by name plus the ordered array. */
-export function buildBones(kind) {
-  const J = JOINTS[kind], p = points(J);
+// Bones of the rigged file (Mixamo-style names) in the order the controller uses them. The file's "Left" side is at -x, which is the
+// character's right hand (the model faces +z): the racket side.
+const GLB = { pelvis: 'Hips', spine: 'Spine1', chest: 'Chest', neck: 'Neck', head: 'Head', clR: 'LeftShoulder', shR: 'LeftArm', elR: 'LeftForeArm', rk: 'LeftHand',
+  clL: 'RightShoulder', shL: 'RightArm', elL: 'RightForeArm', haL: 'RightHand', thR: 'LeftUpLeg', knR: 'LeftLeg', ftR: 'LeftFoot',
+  thL: 'RightUpLeg', knL: 'RightLeg', ftL: 'RightFoot' };
+export const REQUIRED_BONES = Object.values(GLB).concat(['Spine', 'LeftToeBase', 'RightToeBase']);
+
+/**
+ * Use the skeleton of a cloned copy of the rigged file. Reads the bind positions from the file's own bones, computes the neutral-pose
+ * rotation of every bone, and returns the bones under the names skinFollow() uses. Throws if a required bone is missing.
+ */
+export function adoptBones(scene) {
+  const byName = {};
+  scene.traverse((o) => { if (o.isBone) byName[o.name] = o; });
+  const missing = REQUIRED_BONES.filter((n) => !byName[n]);
+  if (missing.length) throw new Error('rig is missing bones: ' + missing.join(', '));
+  scene.updateMatrixWorld(true);
+  const wp = (n) => byName[n].getWorldPosition(new THREE.Vector3());
+  const J = JOINTS.c;
+  const p = {
+    pelvis: wp('Hips'), spinePivot: wp('Spine1'), neck: wp('Neck'), headTop: V(J.headTop),
+    shR: wp('LeftArm'), elR: wp('LeftForeArm'), wrR: wp('LeftHand'), racket: V(J.racket),
+    shL: wp('RightArm'), elL: wp('RightForeArm'), wrL: wp('RightHand'),
+    hipR: wp('LeftUpLeg'), knR: wp('LeftLeg'), anR: wp('LeftFoot'), toR: V(J.toR),
+    hipL: wp('RightUpLeg'), knL: wp('RightLeg'), anL: wp('RightFoot'), toL: V(J.toL),
+    upR: V(J.upR).normalize(), upL: V(J.upL).normalize(),
+  };
   const bones = {}, list = [];
-  for (const [name, parent, joint] of TREE) {
-    const b = new THREE.Bone(); b.name = name;
-    b.userData.bind = p[joint].clone();
-    b.position.copy(p[joint]).sub(parent ? bones[parent].userData.bind : new THREE.Vector3());
-    if (parent) bones[parent].add(b);
-    bones[name] = b; list.push(b);
-  }
-  const { base, offset, baseWorld } = bakeBase(p, J.spread || 0, J.keepArms, J.armAbduct || 0, J.floorAnkle ?? FLOOR_ANKLE_Y);
+  for (const [name, glb] of Object.entries(GLB)) { bones[name] = byName[glb]; bones[name].userData.bind = wp(glb); list.push(byName[glb]); }
+  const { base, offset, baseWorld } = bakeBase(p, J.spread || 0, false, J.armAbduct || 0, J.floorAnkle);
   for (const n in base) bones[n].userData.base = base[n];
   bones.pelvis.userData.offset = offset;
   bones.rk.userData.baseWorld = baseWorld;
-  return { bones, list, root: bones.pelvis };
+  return { bones, list, root: byName.Hips };
 }
 
 const q = new THREE.Quaternion(), r = new THREE.Quaternion();

@@ -1,26 +1,53 @@
-// The owner's own character model, client/models/source/output_mesh_pbr.glb (never modified: it is loaded as it is).
-// That file is one static mesh with no skeleton, so it cannot play animation clips. A skeleton is generated for it in code
-// (skin.js: 19 bones, weights from the measured joints, re-posed into a straight standing neutral pose) and driven by the same pose
-// maths as the procedural athletes. The rig exposes the same fields as characters.js, so scene.js animates it without changes; the
-// jointed groups it returns are placeholders that scene.js writes to and skin.js reads from.
+// The owner's own character. Three files live in client/models/source and none of them is ever modified:
+//   output_mesh_pbr.glb                   the original static mesh (no skeleton)
+//   output_mesh_pbr_rigged_weighted.glb   the automatic rig (joints do not sit on the mesh's anatomy, weights are slabs)
+//   output_mesh_pbr_rigged_fixed.glb      NEW: the same mesh with the joints moved onto the anatomy and rebuilt weights (tools/fix-rig.mjs)
+// The game loads the fixed file, checks it, and drives its real skeleton with the pose maths of scene.js (no clips exist in any of
+// the files). If anything is wrong the procedural athletes stay in use and the reason is logged and shown in the debug panel.
 import * as THREE from 'three';
-import { skinGeometry, buildBones, skinFollow } from './skin.js';
+import { GLTFLoader } from '/vendor/three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as cloneSkinned } from '/vendor/three/examples/jsm/utils/SkeletonUtils.js';
+import { adoptBones, skinFollow, REQUIRED_BONES } from './skin.js';
 import { buildRacket } from './characters.js';
 import { RACKETS } from '/shared/looks.js';
-import { GLTFLoader } from '/vendor/three/examples/jsm/loaders/GLTFLoader.js';
 
-export const MODEL_URL = '/models/source/output_mesh_pbr.glb';
-const HEIGHT = 1.82; // metres: the model is 1.90 m tall; one uniform scale, never changed afterwards
-let source = null, pending = null, loadError = null;
+export const MODEL_URL = '/models/source/output_mesh_pbr_rigged_fixed.glb';
+const HEIGHT = 1.82; // metres: the model is 1.90 m tall; one uniform scale, set once and never changed
+let source = null, pending = null, loadError = null, report = null;
 
-/** Load the source model once. Resolves true when it is usable; failures are logged and the procedural athletes stay in use. */
+/** Check that a loaded file really is a usable rig. Returns a report; `ok` is false when the character must not be used. */
+export function validateRig(scene) {
+  const r = { ok: false, skinnedMesh: false, bones: 0, missing: [], badWeights: 0, vertices: 0, problems: [] };
+  let sm = null; const names = new Set();
+  scene.traverse((o) => { if (o.isSkinnedMesh && !sm) sm = o; if (o.isBone) { names.add(o.name); r.bones++; } });
+  r.skinnedMesh = !!sm;
+  if (!sm) { r.problems.push('no SkinnedMesh'); return r; }
+  r.missing = REQUIRED_BONES.filter((n) => !names.has(n));
+  if (r.missing.length) r.problems.push('missing bones: ' + r.missing.join(', '));
+  const g = sm.geometry, ji = g.attributes.skinIndex, jw = g.attributes.skinWeight;
+  if (!ji || !jw) { r.problems.push('no skin attributes'); return r; }
+  r.vertices = ji.count;
+  const nb = sm.skeleton.bones.length;
+  for (let i = 0; i < ji.count; i++) {
+    let sum = 0, bad = false;
+    for (let k = 0; k < 4; k++) { const w = jw.getComponent(i, k), j = ji.getComponent(i, k); if (!Number.isFinite(w) || w < 0 || (w > 0 && j >= nb)) bad = true; sum += w; }
+    if (bad || Math.abs(sum - 1) > 0.01) r.badWeights++;
+  }
+  if (r.badWeights) r.problems.push(r.badWeights + ' vertices with invalid weights');
+  sm.updateMatrixWorld(true);
+  if (!sm.skeleton.boneInverses?.length) r.problems.push('no inverse bind matrices');
+  r.ok = r.problems.length === 0;
+  return r;
+}
+
+/** Load the rigged file once. Resolves true when it is usable; failures are logged and the procedural athletes stay in use. */
 export function loadStatues() {
   if (pending) return pending;
   pending = new Promise((res) => {
     new GLTFLoader().load(MODEL_URL, (g) => {
-      let mesh = null; g.scene.traverse((o) => { if (o.isMesh && !mesh) mesh = o; });
-      if (!mesh) { loadError = 'no mesh in ' + MODEL_URL; console.error('[player model]', loadError); res(false); return; }
-      source = mesh; res(true);
+      report = validateRig(g.scene);
+      if (!report.ok) { loadError = report.problems.join('; '); console.error('[player model] rejected', MODEL_URL, loadError); res(false); return; }
+      source = g.scene; res(true);
     }, undefined, (e) => { loadError = String(e?.message || e); console.error('[player model] failed to load', MODEL_URL, loadError); res(false); });
   });
   return pending;
@@ -28,30 +55,26 @@ export function loadStatues() {
 
 export const statueReady = () => !!source;
 export const statueError = () => loadError;
+export const statueReport = () => report;
 /** The model replaces the agile archetype only (the first character); the rest stay procedural until this one is approved. */
 export const statueKind = (look) => (look.arch === 0 ? 'c' : null);
 
 const ring = { geo: null };
 
 export function buildStatue(look, team, shadowBlob) {
-  const kind = 'c';
-  const { bones, list, root: boneRoot } = buildBones(kind);
-  const mat = source.material.clone(); // same textures, normal and metal-rough maps as the file; nothing is overridden
-  const mesh = new THREE.SkinnedMesh(skinGeometry(kind, source.geometry), mat);
+  const scene = cloneSkinned(source); // own skeleton per player, shared geometry and materials
+  let mesh = null; scene.traverse((o) => { if (o.isSkinnedMesh) mesh = o; });
   mesh.castShadow = true; mesh.frustumCulled = false; mesh.name = 'player_mesh';
-  const model = new THREE.Group();
-  model.add(boneRoot, mesh);
-  model.updateMatrixWorld(true);
-  const skeleton = new THREE.Skeleton(list);
-  mesh.bind(skeleton, new THREE.Matrix4());
-  source.geometry.computeBoundingBox();
-  const box = source.geometry.boundingBox;
+  const { bones, list } = adoptBones(scene);
+  mesh.geometry.computeBoundingBox();
+  const box = mesh.geometry.boundingBox;
   const k = HEIGHT / (box.max.y - box.min.y);
+  const model = new THREE.Group(); model.add(scene);
   model.scale.setScalar(k); // uniform scale, set once
   model.position.y = -box.min.y * k; // feet on the floor
   const root = new THREE.Group(); root.name = `player_c_team${team}`; root.add(model);
 
-  // the racket is a child of the right-hand bone: it moves with the hand and never exists in the gameplay collision logic
+  // the racket is a child of the racket-hand bone: it moves with the hand and never exists in the gameplay collision logic
   const racketMesh = buildRacket(RACKETS[look.racket % RACKETS.length]);
   racketMesh.scale.setScalar(1 / k); racketMesh.position.set(0, -0.045, 0.012);
   bones.rk.add(racketMesh);
@@ -72,10 +95,10 @@ export function buildStatue(look, team, shadowBlob) {
   hips.add(spine); root.add(hips); B.elbow.add(racket); spine.add(A.sh, B.sh);
   return {
     root, blob, hips, spine, head, legL: legP(), legR: legP(), armL: A, armR: B, racket,
-    statue: true, skin: { bones, unit: 1 / k, keepArms: false, scale: k, boneCount: list.length, racketMesh }, team, look,
+    statue: true, skin: { bones, unit: 1 / k, keepArms: false, scale: k, boneCount: list.length, racketMesh, file: 'rigged_fixed' }, team, look,
     phase: Math.random() * 6, idlePh: Math.random() * 6, yaw: team === 0 ? 0 : Math.PI, split: 0, lastY: 0, markMat: mark.material,
   };
 }
 
-/** Copy the pose that scene.js computed onto the skinned model. */
+/** Copy the pose that scene.js computed onto the skeleton. */
 export const statueFollow = skinFollow;

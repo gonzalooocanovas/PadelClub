@@ -1,0 +1,31 @@
+<!doctype html><meta charset=utf-8><title>rig inspect (development only)</title>
+<script type="importmap">{"imports":{"three":"/vendor/three/build/three.module.min.js"}}</script>
+<body style="margin:0;background:#789;font:12px monospace"><div id=info style="position:fixed;right:0;top:0;background:#000a;color:#fff;padding:4px;max-width:340px;white-space:pre;z-index:9"></div>
+<script type=module>
+// Development-only rig inspection: skeleton overlay, weight colouring, per-bone test rotations, front/side/rear views.
+// URL: ?f=<file under /models/source>&mode=weights|skin&bone=RightArm&rx=0&ry=0&rz=0&view=front|side|rear&h=1&cy=0&skel=1&pose=<name>
+import * as THREE from 'three';import {GLTFLoader} from '/vendor/three/examples/jsm/loaders/GLTFLoader.js';
+const q=new URLSearchParams(location.search);const W=800,H=600;
+const r=new THREE.WebGLRenderer({antialias:true});r.setSize(W,H);document.body.prepend(r.domElement);
+const s=new THREE.Scene();s.add(new THREE.AmbientLight(0xffffff,1.6));const dl=new THREE.DirectionalLight(0xffffff,1.8);dl.position.set(2,3,4);s.add(dl);
+const half=+(q.get('h')||1.05),cy=+(q.get('cy')||0),view=q.get('view')||'front';
+const cam=new THREE.OrthographicCamera(-half*W/H,half*W/H,half,-half,0.01,20);
+const a=view==='side'?Math.PI/2:view==='rear'?Math.PI:0;cam.position.set(Math.sin(a)*5,cy,Math.cos(a)*5);cam.lookAt(0,cy,0);
+const file=q.get('f')||'output_mesh_pbr_rigged_weighted.glb';
+new GLTFLoader().load('/models/source/'+file,g=>{
+  const root=g.scene;s.add(root);let sm=null;root.traverse(o=>{if(o.isSkinnedMesh)sm=o;});
+  const bones=sm.skeleton.bones;const byName=Object.fromEntries(bones.map(b=>[b.name,b]));
+  const rep={bones:bones.length,hasSkin:!!sm,verts:sm.geometry.attributes.position.count};
+  if(q.get('mode')==='weights'){const idx=sm.geometry.attributes.skinIndex,w=sm.geometry.attributes.skinWeight,n=idx.count,col=new Float32Array(n*3);
+    const pal=bones.map((_,i)=>new THREE.Color().setHSL((i*0.61803)%1,0.85,0.5));
+    for(let i=0;i<n;i++){let best=0,bw=-1;for(let k=0;k<4;k++){if(w.getComponent(i,k)>bw){bw=w.getComponent(i,k);best=idx.getComponent(i,k);}}const c=pal[best];col.set([c.r,c.g,c.b],i*3);}
+    sm.geometry.setAttribute('color',new THREE.BufferAttribute(col,3));sm.material=new THREE.MeshBasicMaterial({vertexColors:true,side:THREE.DoubleSide});}
+  // test rotations: bone=A,B  rx=0.5,0  ry=...  rz=...  (radians, applied on top of the bind rotation)
+  const names=(q.get('bone')||'').split(',').filter(Boolean),rx=(q.get('rx')||'').split(',').map(Number),ry=(q.get('ry')||'').split(',').map(Number),rz=(q.get('rz')||'').split(',').map(Number);
+  names.forEach((n,i)=>{const b=byName[n];if(!b){rep.missing=(rep.missing||[]).concat(n);return;}b.rotation.set(rx[i]||0,ry[i]||0,rz[i]||0);});
+  root.updateMatrixWorld(true);
+  if(q.get('skel')==='1'){const h=new THREE.SkeletonHelper(root);h.material.depthTest=false;h.material.linewidth=2;h.renderOrder=99;s.add(h);}
+  document.getElementById('info').textContent=JSON.stringify(rep,null,1);
+  (function L(){r.render(s,cam);requestAnimationFrame(L)})();window.rig={bones,byName,sm,root};window.ready=1;
+},undefined,e=>{document.getElementById('info').textContent='LOAD ERROR '+e});
+</script>
