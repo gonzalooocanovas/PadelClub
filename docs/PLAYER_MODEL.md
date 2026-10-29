@@ -5,6 +5,7 @@ Files in `client/models/source/` (none of them is ever overwritten; `test/rig-fi
 |---|---|
 | `output_mesh_pbr.glb` | the original static mesh: no skeleton, no clips |
 | `output_mesh_pbr_rigged_weighted.glb` | the automatic rig you supplied (22 joints, skin weights) |
+| `output_mesh_pbr_rigged_game.glb` | the lightweight copy the game loads: 16k triangles (from 53k), 1024 px WebP textures, 0.9 MB (from 9 MB); same skeleton and weights |
 | `output_mesh_pbr_rigged_fixed.glb` | **new**: the same mesh with the joints moved onto its anatomy and rebuilt weights (`tools/fix-rig.mjs`) |
 
 ## 1. Inspection of the weighted file

@@ -11,7 +11,7 @@ import { adoptBones, skinFollow, REQUIRED_BONES } from './skin.js';
 import { buildRacket } from './characters.js';
 import { RACKETS, ARCHETYPES } from '/shared/looks.js';
 
-export const MODEL_URL = '/models/source/output_mesh_pbr_rigged_fixed.glb';
+export const MODEL_URL = '/models/source/output_mesh_pbr_rigged_game.glb'; // 16k triangles, 1024 px WebP textures, 0.9 MB: the lightweight copy of the fixed rig (the full one stays beside it)
 const HEIGHT = 1.82; // metres: the model is 1.90 m tall; one uniform scale, set once and never changed
 let source = null, pending = null, loadError = null, report = null;
 

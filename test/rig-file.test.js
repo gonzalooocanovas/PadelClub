@@ -71,3 +71,15 @@ test('the joints sit on the anatomy: shoulders, elbows, knees and ankles are whe
   assert.ok(Math.abs(at('LeftFoot')[1] - -0.8) < 0.02, 'ankle height');
   assert.ok(at('LeftArm')[0] < 0 && at('RightArm')[0] > 0, 'the file\'s Left side is at -x (the racket side of the game)');
 });
+
+test('the lightweight game copy keeps the skin (22 joints, normalised weights) and is much smaller than the fixed file', () => {
+  const g = parse(read('output_mesh_pbr_rigged_game.glb'));
+  assert.equal(g.json.skins[0].joints.length, 22);
+  const prim = g.json.meshes[0].primitives[0];
+  assert.ok(g.json.accessors[prim.indices].count / 3 < 20000, 'triangles');
+  const J = accessor(g, prim.attributes.JOINTS_0, 4), W = accessor(g, prim.attributes.WEIGHTS_0, 4);
+  let bad = 0;
+  for (let i = 0; i < W.length / 4; i++) { let s = 0; for (let k = 0; k < 4; k++) { const x = W[i * 4 + k]; if (!Number.isFinite(x) || x < 0) bad++; s += x; if (x > 0 && J[i * 4 + k] > 21) bad++; } if (Math.abs(s - 1) > 0.01) bad++; }
+  assert.equal(bad, 0);
+  assert.ok(read('output_mesh_pbr_rigged_game.glb').length < 1.5e6);
+});
