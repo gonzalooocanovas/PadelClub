@@ -9,7 +9,7 @@ import { GLTFLoader } from '/vendor/three/examples/jsm/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from '/vendor/three/examples/jsm/utils/SkeletonUtils.js';
 import { adoptBones, skinFollow, REQUIRED_BONES } from './skin.js';
 import { buildRacket } from './characters.js';
-import { RACKETS } from '/shared/looks.js';
+import { RACKETS, ARCHETYPES } from '/shared/looks.js';
 
 export const MODEL_URL = '/models/source/output_mesh_pbr_rigged_fixed.glb';
 const HEIGHT = 1.82; // metres: the model is 1.90 m tall; one uniform scale, set once and never changed
@@ -56,8 +56,8 @@ export function loadStatues() {
 export const statueReady = () => !!source;
 export const statueError = () => loadError;
 export const statueReport = () => report;
-/** The model replaces the agile archetype only (the first character); the rest stay procedural until this one is approved. */
-export const statueKind = (look) => (look.arch === 0 ? 'c' : null);
+/** The owner's character is used for every player; the archetype only changes its height (one uniform scale, never stretched). */
+export const statueKind = () => 'c';
 
 const ring = { geo: null };
 
@@ -68,7 +68,7 @@ export function buildStatue(look, team, shadowBlob) {
   const { bones, list } = adoptBones(scene);
   mesh.geometry.computeBoundingBox();
   const box = mesh.geometry.boundingBox;
-  const k = HEIGHT / (box.max.y - box.min.y);
+  const k = (HEIGHT * ((ARCHETYPES[look.arch] || ARCHETYPES[0]).height / ARCHETYPES[0].height)) / (box.max.y - box.min.y);
   const model = new THREE.Group(); model.add(scene);
   model.scale.setScalar(k); // uniform scale, set once
   model.position.y = -box.min.y * k; // feet on the floor
