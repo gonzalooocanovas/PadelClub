@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import { COURT } from '/shared/constants.js';
 import { predictBall } from '/shared/physics.js';
 import { Rolling, buildReport, landingComparison } from './diagnostics-core.js';
+import { statueReady, statueError, MODEL_URL } from './statue.js';
+const statueNote = () => (statueError() ? `FAILED to load (${statueError()}): procedural fallback` : statueReady() ? `loaded (${MODEL_URL}); the file has no skeleton and no clips: a generated skeleton is used` : 'loading...');
 
 const MAT = {
   glass: new THREE.LineBasicMaterial({ color: 0x59d8ff }),
@@ -144,6 +146,10 @@ export class Diagnostics {
     if (this.lastHit) L.push(`last hit  ${this.lastHit.kind} ${this.lastHit.label} q=${this.lastHit.q}  tactic ${this.lastHit.tac || '-'}  planned landing ${this.lastHit.tgt ? this.lastHit.tgt.join(', ') : 'n/a'}`);
     if (this.landing) L.push(`landing  planned(yellow) ${fmt(this.landing.planned)}  predicted(blue) ${fmt(this.landing.predicted)}  actual(red) ${fmt(this.landing.actual)}  |plan-actual| ${this.landing.plannedVsActual?.toFixed(2) ?? 'n/a'} m`);
     if (ctx.bots) for (const bt of ctx.bots) L.push(`bot ${bt.slot} ${bt.level}: ${bt.decision ? `${bt.decision.tac} — ${bt.decision.reason}` : 'no decision yet'}  owner ${bt.owner}`);
+    if (ctx.anim) {
+      L.push(`animation  model file ${statueNote()}`);
+      for (const a of ctx.anim) L.push(`  p${a.slot} ${a.model}: state ${a.state} (changes ${a.changes})  clip ${a.clip}  blend ${a.blend}  skeleton ${a.skeleton}  racket ${a.racket ? 'attached' : 'MISSING'}  scale ${a.scale}  yaw ${a.yaw}`);
+    }
     L.push('recent events:');
     for (const e of this.events.slice(-8)) L.push(`  ${e.t.toFixed(1)}s ${e.e}${e.k ? ':' + e.k : ''}${e.kind ? ' ' + e.kind : ''}${e.label ? ' ' + e.label : ''}${e.reason ? ' ' + e.reason : ''}`);
     L.push(ctx.solo ? "solo controls: [ pause/resume   ] one tick   F3 hide   F4 copy" : 'online: no stepping or pausing from here');

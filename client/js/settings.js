@@ -21,7 +21,7 @@ const DEFAULTS = {
   hints: true,
   highContrast: false,
   invertAim: false,
-  scannedModels: false, // use the scanned 3D player models (rigid: they lean and turn but do not swing); off = the jointed, animated characters
+  scannedModels: true, // use the owner's 3D character (client/models/source) for the agile archetype; off = the procedural athletes
 };
 
 let cur = { ...DEFAULTS };

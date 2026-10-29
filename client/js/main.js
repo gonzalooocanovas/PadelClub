@@ -72,6 +72,7 @@ const diag = new Diagnostics({
     mode: local ? 'solo' : room ? `online ${room.settings?.mode || ''}` : 'menu', court: world.courtId, camera: settings.camera, quality: settings.quality,
     ball: match?.ballView, me: match?.me, online: !local && !!match, solo: !!local, interpMs: match ? Math.round(match.interp * 1000) : null, rtt: net.rtt,
     singles: room?.settings?.mode === 'singles',
+    anim: world.animDebug(),
     bots: local ? [1, 2, 3].map((s) => ({ slot: s, level: typeof local.diffs[s] === 'object' ? local.diffs[s].level : local.diffs[s] || local.settings.difficulty, decision: local.mem[s]?.decision || null, owner: local.game._tp?.[s >> 1]?.owner ?? null })) : null,
   }),
 });

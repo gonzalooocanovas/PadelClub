@@ -8,26 +8,15 @@ import * as THREE from 'three';
 const V = (a) => new THREE.Vector3(...a);
 
 export const JOINTS = {
-  // model b: ready stance (the lady). Hands hold the racket in front of the hips.
-  b: {
-    pelvis: [0, 0.5, -0.22], neck: [0, 0.8, 0.05], headC: [0, 0.9, 0.15], headTop: [0, 1.0, 0.13],
-    shR: [-0.165, 0.72, -0.04], elR: [-0.195, 0.575, 0.03], wrR: [-0.145, 0.47, 0.08], racket: [-0.2, 0.52, 0.27],
-    shL: [0.165, 0.72, -0.04], elL: [0.13, 0.6, 0.02], wrL: [0.04, 0.48, 0.1],
-    hipR: [-0.1, 0.48, -0.22], knR: [-0.215, 0.31, -0.03], anR: [-0.335, 0.07, -0.12], toR: [-0.34, 0.02, 0.03],
-    hipL: [0.1, 0.48, -0.22], knL: [0.19, 0.33, -0.03], anL: [0.33, 0.07, -0.12], toL: [0.34, 0.02, 0.03], upR: [0, 1, 0.1], upL: [0, 1, 0.1],
-    torsoR: 0.17, handL: [-0.1, 0.46, 0.1], spread: 0.03,
-    // her hands touch the racket and her belly and the scan is one closed surface there: triangles that join her left hand to those
-    // parts are dropped (the hand is a closed shell on its own), otherwise they stretch into skin sheets when the arms move
-    cutHands: true,
-  },
-  // model a: the man, caught mid-stride in a forehand lunge (right leg forward, left leg trailing and lifted).
-  a: {
-    pelvis: [0.03, 0.38, 0.05], neck: [0, 0.66, 0.2], headC: [0, 0.73, 0.27], headTop: [0, 0.81, 0.26],
-    shR: [-0.12, 0.62, 0.1], elR: [-0.15, 0.5, 0.2], wrR: [-0.14, 0.41, 0.36], racket: [-0.21, 0.36, 0.47],
-    shL: [0.12, 0.64, 0.1], elL: [0.19, 0.6, -0.1], wrL: [0.24, 0.54, -0.06],
-    hipR: [-0.04, 0.36, 0.08], knR: [-0.055, 0.28, 0.25], anR: [-0.04, 0.08, 0.35], toR: [-0.04, 0.03, 0.44],
-    hipL: [0.07, 0.36, 0.0], knL: [0.15, 0.25, -0.1], anL: [0.16, 0.2, -0.38], toL: [0.17, 0.1, -0.46], upR: [0, 1, 0.15], upL: [0, 0.6, 0.8],
-    torsoR: 0.15, spread: 0.04,
+  // model c: the owner's own character (output_mesh_pbr.glb), standing in an A-pose, 1.90 m, empty hands
+  c: {
+    pelvis: [0, 0.0, -0.02], neck: [0, 0.63, 0.0], headC: [0, 0.82, 0.02], headTop: [0, 0.95, 0.0],
+    shR: [-0.2, 0.55, 0], elR: [-0.27, 0.31, -0.01], wrR: [-0.375, 0.085, 0.0], racket: [-0.41, -0.14, 0.0], handL: [0.425, -0.14, 0.0],
+    shL: [0.2, 0.55, 0], elL: [0.28, 0.31, -0.01], wrL: [0.39, 0.07, 0.0],
+    hipR: [-0.105, -0.08, -0.02], knR: [-0.13, -0.43, 0.03], anR: [-0.155, -0.8, -0.02], toR: [-0.16, -0.92, 0.2],
+    hipL: [0.105, -0.08, -0.02], knL: [0.13, -0.43, 0.03], anL: [0.15, -0.8, -0.02], toL: [0.16, -0.92, 0.2],
+    upR: [0, 1, 0.1], upL: [0, 1, 0.1],
+    torsoR: 0.17, rs: 0.85, spread: 0.05, armAbduct: 0.12, floorAnkle: -0.8,
   },
 };
 
@@ -57,18 +46,20 @@ function points(J) {
 
 // capsules that claim vertices for each bone: [bone, from, to, radius]
 function capsules(J, p) {
-  const t = J.torsoR, L = (a, b, f) => a.clone().lerp(b, f);
-  return [
+  const t = J.torsoR, L = (a, b, f) => a.clone().lerp(b, f), k = J.rs || 1;
+  const caps = [
     ['pelvis', p.pelvis, L(p.pelvis, p.neck, 0.2), t * 0.95],
     ['spine', L(p.pelvis, p.neck, 0.2), L(p.pelvis, p.neck, 0.55), t],
     ['chest', L(p.pelvis, p.neck, 0.55), L(p.pelvis, p.neck, 0.95), t],
     ['neck', p.neck, L(p.neck, p.headC, 0.5), 0.06],
     ['head', L(p.neck, p.headC, 0.55), p.headTop, 0.11],
-    ['clR', p.clPivR, p.shR, 0.05], ['shR', p.shR, p.elR, 0.055], ['elR', p.elR, p.wrR, 0.048], ['rk', p.wrR, p.racket, 0.14],
-    ['clL', p.clPivL, p.shL, 0.05], ['shL', p.shL, p.elL, 0.055], ['elL', p.elL, p.wrL, 0.048], ['haL', p.wrL, p.handL, 0.05],
+    ['clR', p.clPivR, p.shR, 0.05], ['shR', p.shR, p.elR, 0.055], ['elR', p.elR, p.wrR, 0.048], ['rk', p.wrR, p.racket, 0.1],
+    ['clL', p.clPivL, p.shL, 0.05], ['shL', p.shL, p.elL, 0.055], ['elL', p.elL, p.wrL, 0.048], ['haL', p.wrL, p.handL, 0.06],
     ['thR', p.hipR, p.knR, 0.1], ['knR', p.knR, p.anR, 0.065], ['ftR', p.anR, p.toR, 0.06],
     ['thL', p.hipL, p.knL, 0.1], ['knL', p.knL, p.anL, 0.065], ['ftL', p.anL, p.toL, 0.06],
   ];
+  // limbs and head scale with the model; the torso radius is given directly
+  return caps.map(([b, a, c, r]) => [b, a, c, ['pelvis', 'spine', 'chest'].includes(b) ? r : r * k]);
 }
 
 const seg = (p, a, b) => {
@@ -159,25 +150,26 @@ const REST_HIP_Y = 0.98; // standing with straight legs
 // the animation maths starts from: every segment is rotated so that it points where the procedural rig's segment points.
 const DOWN = new THREE.Vector3(0, -1, 0), UP = new THREE.Vector3(0, 1, 0), FWD = new THREE.Vector3(0, -0.03, 1);
 const FLOOR_ANKLE_Y = 0.07;
+const Z = new THREE.Vector3(0, 0, 1);
 const dirOf = (...qs) => { const o = DOWN.clone(); for (let i = qs.length - 1; i >= 0; i--) o.applyQuaternion(qs[i]); return o; };
 
 // bone -> [from joint, to joint, target direction in the body's frame]
-function targets(spread = 0) {
+function targets(spread = 0, abduct = 0) {
   const S = E(...REST_E.spine), lean = UP.clone().applyQuaternion(S);
   const { shR, elR, shL, elL, knR, knL } = REST;
   const thR = E(...REST_E.thR.slice(0, 2), REST_E.thR[2] - spread), thL = E(...REST_E.thL.slice(0, 2), REST_E.thL[2] + spread);
   return {
     spine: ['spinePivot', 'neck', lean], neck: ['neck', 'headTop', lean],
-    shR: ['shR', 'elR', dirOf(S, shR)], elR: ['elR', 'wrR', dirOf(S, shR, elR)], rk: ['wrR', 'racket', dirOf(S, shR, elR)],
-    shL: ['shL', 'elL', dirOf(S, shL)], elL: ['elL', 'wrL', dirOf(S, shL, elL)],
+    shR: ['shR', 'elR', dirOf(S, shR).applyAxisAngle(Z, -abduct)], elR: ['elR', 'wrR', dirOf(S, shR, elR).applyAxisAngle(Z, -abduct)], rk: ['wrR', 'racket', dirOf(S, shR, elR).applyAxisAngle(Z, -abduct)],
+    shL: ['shL', 'elL', dirOf(S, shL).applyAxisAngle(Z, abduct)], elL: ['elL', 'wrL', dirOf(S, shL, elL).applyAxisAngle(Z, abduct)],
     thR: ['hipR', 'knR', dirOf(thR)], knR: ['knR', 'anR', dirOf(thR, knR)], ftR: ['anR', 'toR', FWD.clone(), 'upR'],
     thL: ['hipL', 'knL', dirOf(thL)], knL: ['knL', 'anL', dirOf(thL, knL)], ftL: ['anL', 'toL', FWD.clone(), 'upL'],
   };
 }
 
 /** Rotation of every bone into the neutral stance, and the pelvis offset that puts both feet on the floor under the body. */
-function bakeBase(p, spread, keepArms) {
-  const T = targets(spread);
+function bakeBase(p, spread, keepArms, abduct, floorAnkle) {
+  const T = targets(spread, abduct);
   if (keepArms) for (const k of ['shR', 'elR', 'shL', 'elL']) delete T[k];
   const Wd = {}, base = {}, ident = new THREE.Quaternion();
   for (const [name, parent] of TREE) {
@@ -199,7 +191,7 @@ function bakeBase(p, spread, keepArms) {
     .add(p['kn' + s].clone().sub(p['hip' + s]).applyQuaternion(Wd['th' + s]))
     .add(p['an' + s].clone().sub(p['kn' + s]).applyQuaternion(Wd['kn' + s]));
   const mid = ankle('R').add(ankle('L')).multiplyScalar(0.5);
-  return { base, baseWorld: Wd.rk, offset: new THREE.Vector3(-mid.x, FLOOR_ANKLE_Y - mid.y, -mid.z) };
+  return { base, baseWorld: Wd.rk, offset: new THREE.Vector3(-mid.x, floorAnkle - mid.y, -mid.z) };
 }
 
 /** A fresh skeleton in the bind pose. Returns the bones by name plus the ordered array. */
@@ -213,7 +205,7 @@ export function buildBones(kind) {
     if (parent) bones[parent].add(b);
     bones[name] = b; list.push(b);
   }
-  const { base, offset, baseWorld } = bakeBase(p, J.spread || 0, J.keepArms);
+  const { base, offset, baseWorld } = bakeBase(p, J.spread || 0, J.keepArms, J.armAbduct || 0, J.floorAnkle ?? FLOOR_ANKLE_Y);
   for (const n in base) bones[n].userData.base = base[n];
   bones.pelvis.userData.offset = offset;
   bones.rk.userData.baseWorld = baseWorld;

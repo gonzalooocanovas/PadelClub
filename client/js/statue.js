@@ -1,47 +1,60 @@
-// Scanned player models (client/models/player_*.glb): one rigid mesh each, no skeleton. They cannot swing a racket, so the body is
-// moved as a whole (lean, twist, bob, crouch). The rig exposes the same fields as characters.js so scene.js animates it unchanged;
-// the jointed bones are empty placeholder groups and statueFollow() copies the useful part of the pose onto the model.
+// The owner's own character model, client/models/source/output_mesh_pbr.glb (never modified: it is loaded as it is).
+// That file is one static mesh with no skeleton, so it cannot play animation clips. A skeleton is generated for it in code
+// (skin.js: 19 bones, weights from the measured joints, re-posed into a straight standing neutral pose) and driven by the same pose
+// maths as the procedural athletes. The rig exposes the same fields as characters.js, so scene.js animates it without changes; the
+// jointed groups it returns are placeholders that scene.js writes to and skin.js reads from.
 import * as THREE from 'three';
-import { skinGeometry, buildBones, skinFollow, JOINTS } from './skin.js';
+import { skinGeometry, buildBones, skinFollow } from './skin.js';
+import { buildRacket } from './characters.js';
+import { RACKETS } from '/shared/looks.js';
 import { GLTFLoader } from '/vendor/three/examples/jsm/loaders/GLTFLoader.js';
 
-const FILES = { a: '/models/player_a.glb', b: '/models/player_b.glb' };
-const HEIGHT = { a: 1.85, b: 1.75 }; // metres, standing-ish; model a is a lunge so this is its full extent
-const loaded = {};
-let pending = null;
+export const MODEL_URL = '/models/source/output_mesh_pbr.glb';
+const HEIGHT = 1.82; // metres: the model is 1.90 m tall; one uniform scale, never changed afterwards
+let source = null, pending = null, loadError = null;
 
-/** Load both models once. Resolves with true when at least one is available. */
+/** Load the source model once. Resolves true when it is usable; failures are logged and the procedural athletes stay in use. */
 export function loadStatues() {
   if (pending) return pending;
-  const loader = new GLTFLoader();
-  pending = Promise.all(Object.entries(FILES).map(([k, url]) => new Promise((res) => {
-    loader.load(url, (g) => { loaded[k] = g.scene; res(true); }, undefined, () => res(false));
-  }))).then((r) => r.some(Boolean));
+  pending = new Promise((res) => {
+    new GLTFLoader().load(MODEL_URL, (g) => {
+      let mesh = null; g.scene.traverse((o) => { if (o.isMesh && !mesh) mesh = o; });
+      if (!mesh) { loadError = 'no mesh in ' + MODEL_URL; console.error('[player model]', loadError); res(false); return; }
+      source = mesh; res(true);
+    }, undefined, (e) => { loadError = String(e?.message || e); console.error('[player model] failed to load', MODEL_URL, loadError); res(false); });
+  });
   return pending;
 }
 
-export const statueReady = (kind) => !!loaded[kind];
-export const statueKind = (look) => (look.arch === 1 || look.arch === 3 ? 'b' : 'a');
+export const statueReady = () => !!source;
+export const statueError = () => loadError;
+/** The model replaces the agile archetype only (the first character); the rest stay procedural until this one is approved. */
+export const statueKind = (look) => (look.arch === 0 ? 'c' : null);
 
 const ring = { geo: null };
 
 export function buildStatue(look, team, shadowBlob) {
-  const kind = statueKind(look);
-  let src; loaded[kind].traverse((o) => { if (o.isMesh && !src) src = o; });
-  const model = new THREE.Group();
+  const kind = 'c';
   const { bones, list, root: boneRoot } = buildBones(kind);
-  const mesh = new THREE.SkinnedMesh(skinGeometry(kind, src.geometry), src.material.clone());
-  mesh.material.roughness = 0.85; mesh.material.metalness = 0; mesh.material.side = THREE.DoubleSide;
-  mesh.castShadow = true; mesh.frustumCulled = false;
+  const mat = source.material.clone(); // same textures, normal and metal-rough maps as the file; nothing is overridden
+  const mesh = new THREE.SkinnedMesh(skinGeometry(kind, source.geometry), mat);
+  mesh.castShadow = true; mesh.frustumCulled = false; mesh.name = 'player_mesh';
+  const model = new THREE.Group();
   model.add(boneRoot, mesh);
   model.updateMatrixWorld(true);
-  mesh.bind(new THREE.Skeleton(list), new THREE.Matrix4());
-  const box = new THREE.Box3().setFromObject(src);
-  const k = HEIGHT[kind] / (box.max.y - box.min.y);
-  model.scale.setScalar(k);
-  model.position.y = -box.min.y * k;
-  const body = new THREE.Group(); body.name = 'statue_body'; body.add(model);
-  const root = new THREE.Group(); root.name = `statue_${kind}_team${team}`; root.add(body);
+  const skeleton = new THREE.Skeleton(list);
+  mesh.bind(skeleton, new THREE.Matrix4());
+  source.geometry.computeBoundingBox();
+  const box = source.geometry.boundingBox;
+  const k = HEIGHT / (box.max.y - box.min.y);
+  model.scale.setScalar(k); // uniform scale, set once
+  model.position.y = -box.min.y * k; // feet on the floor
+  const root = new THREE.Group(); root.name = `player_c_team${team}`; root.add(model);
+
+  // the racket is a child of the right-hand bone: it moves with the hand and never exists in the gameplay collision logic
+  const racketMesh = buildRacket(RACKETS[look.racket % RACKETS.length]);
+  racketMesh.scale.setScalar(1 / k); racketMesh.position.set(0, -0.045, 0.012);
+  bones.rk.add(racketMesh);
 
   if (!ring.geo) ring.geo = new THREE.RingGeometry(0.42, 0.52, 40);
   const mark = new THREE.Mesh(ring.geo, new THREE.MeshBasicMaterial({ color: team === 0 ? 0x3f8cff : 0xff4a4a, transparent: true, opacity: 0.85, depthWrite: false }));
@@ -58,9 +71,9 @@ export function buildStatue(look, team, shadowBlob) {
   for (const j of [A.sh, A.elbow, B.sh, B.elbow]) j.rotation.order = 'YXZ';
   hips.add(spine); root.add(hips); B.elbow.add(racket); spine.add(A.sh, B.sh);
   return {
-    root, blob, body, hips, spine, head, legL: legP(), legR: legP(), armL: A, armR: B, racket,
-    statue: true, skin: { bones, unit: 1 / k, keepArms: !!JOINTS[kind].keepArms }, team, look, phase: Math.random() * 6, idlePh: Math.random() * 6, yaw: team === 0 ? 0 : Math.PI,
-    split: 0, lastY: 0, markMat: mark.material,
+    root, blob, hips, spine, head, legL: legP(), legR: legP(), armL: A, armR: B, racket,
+    statue: true, skin: { bones, unit: 1 / k, keepArms: false, scale: k, boneCount: list.length, racketMesh }, team, look,
+    phase: Math.random() * 6, idlePh: Math.random() * 6, yaw: team === 0 ? 0 : Math.PI, split: 0, lastY: 0, markMat: mark.material,
   };
 }
 

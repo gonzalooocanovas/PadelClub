@@ -10,6 +10,7 @@ import { DEFAULT_LOOKS } from '/shared/looks.js';
 import { buildCharacter, disposeCharacter, blobShadow } from './characters.js';
 import { loadStatues, statueReady, statueKind, buildStatue, statueFollow } from './statue.js';
 import { restPose, captureRest } from './skin.js';
+import { newAnim, stepAnim, animLabel } from './anim-state.js';
 import { settings, onSetting } from './settings.js';
 import { buildEnvironment } from './envs.js';
 import { netHeight } from '/shared/physics.js';
@@ -413,7 +414,7 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
    * Poses are driven by a small parameter vector (see READY) so every shot is a set of keyframes.
    */
   makePlayer(team, look) {
-    const rig = settings.scannedModels && statueReady(statueKind(look)) ? buildStatue(look, team, blobShadow()) : buildCharacter(look, team);
+    const rig = settings.scannedModels && statueKind(look) && statueReady() ? buildStatue(look, team, blobShadow()) : buildCharacter(look, team);
     rig.cur = READY.slice();
     if (rig.statue) { restPose(rig); this.orientRacket(rig); captureRest(rig); }
     return rig;
@@ -424,7 +425,7 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
     this.lastLooks = looks;
     for (let i = 0; i < 4; i++) {
       const look = looks?.[i] || DEFAULT_LOOKS[i];
-      const key = JSON.stringify(look) + (settings.scannedModels && statueReady(statueKind(look)) ? '|s' : '');
+      const key = JSON.stringify(look) + (settings.scannedModels && statueKind(look) && statueReady() ? '|s' : '');
       if (this.players[i] && this.players[i].lookKey === key) continue;
       const old = this.players[i];
       if (old) { this.scene.remove(old.root); disposeCharacter(old); }
@@ -500,6 +501,7 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
     const sy = Math.sin(pl.yaw), cy = Math.cos(pl.yaw);
     const vf = v.vx * sy + v.vz * cy;
     const vl = v.vx * cy - v.vz * sy;
+    stepAnim(pl.anim || (pl.anim = newAnim()), v, pl.yaw, dt); // the named state (idle, run, swing:forehand...) shown by the debug panel
     // smoothed speed (so bot jitter does not flap the legs); cadence follows ground speed so feet do not slide
     pl.speedS = (pl.speedS ?? speed) + (speed - (pl.speedS ?? speed)) * Math.min(1, dt * 9);
     const sp = pl.speedS;
@@ -650,6 +652,16 @@ if (swinging) {
       this.meRing.position.set(v.x, 0.03, v.z);
       this.reachRing.position.set(v.x, 0.03, v.z);
     }
+  }
+
+  /** Per-player animation state for the debug panel (read-only). */
+  animDebug() {
+    return this.players.map((pl, slot) => ({
+      slot, model: pl.statue ? '3D model (generated skeleton)' : 'procedural', state: pl.anim ? animLabel(pl.anim) : '-', changes: pl.anim?.changes ?? 0,
+      clip: pl.statue ? 'pose-driven (no clips in the file)' : 'pose-driven', skeleton: pl.statue ? `${pl.skin.boneCount} bones` : 'jointed groups',
+      racket: pl.statue ? !!pl.skin.racketMesh?.parent : !!pl.racket?.parent, scale: +(pl.statue ? pl.skin.scale : pl.root.scale.x).toFixed(3), yaw: +pl.yaw.toFixed(2),
+      swing: pl.wasSwinging ? 'active' : '-', blend: +(Math.min(1, pl.anim ? (pl.anim.t - pl.anim.since) / 0.2 : 1)).toFixed(2),
+    }));
   }
 
   setBall(x, y, z) {
