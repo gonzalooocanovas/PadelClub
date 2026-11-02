@@ -440,6 +440,7 @@ export class UI {
       ${tog('timing', 'Timing indicator')}
       ${tog('replays', 'Instant replays after points (solo matches)')}
       ${tog('scannedModels', 'My 3D character model (agile archetype)')}
+      ${tog('landingMarker', 'Show where the ball lands')}
       ${tog('trail', 'Ball trail')}
       ${tog('highContrast', 'High contrast UI')}
       <div class="setting"><span>Controls (keyboard, mouse, gamepad)</span><button class="btn small primary" data-act="controlsSettings">Configure…</button></div>

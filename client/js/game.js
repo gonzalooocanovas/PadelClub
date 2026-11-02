@@ -178,6 +178,7 @@ export class MatchClient {
     const L = (p, q) => p + (q - p) * f;
     const ball = { x: L(a.ball.x, b.ball.x), y: L(a.ball.y, b.ball.y), z: L(a.ball.z, b.ball.z) };
     w.setBall(ball.x, ball.y, ball.z);
+    w.updateLanding(null);
     w.ballVel = { x: a.ball.vx, y: a.ball.vy, z: a.ball.vz };
     const sp = Math.hypot(a.ball.vx, a.ball.vz);
     w.animateBall(dt * 0.55, Math.hypot(sp, a.ball.vy), sp > 0.1 ? a.ball.vx / sp : 0, sp > 0.1 ? a.ball.vz / sp : 1, a.ball.sb, a.ball.ss);
@@ -465,6 +466,7 @@ export class MatchClient {
       w.ballVel = { x: view.ball.vx, y: view.ball.vy, z: view.ball.vz };
       const sp = Math.hypot(view.ball.vx, view.ball.vz);
       w.animateBall(dt, Math.hypot(sp, view.ball.vy), sp > 0.1 ? view.ball.vx / sp : 0, sp > 0.1 ? view.ball.vz / sp : 1, view.ball.sb, view.ball.ss);
+      w.updateLanding(view.ball, settings.landingMarker, this.settings?.mode === 'singles');
       view.players.forEach((v, k) => {
         v.serving = this.phase === 'serve' && k === this.serverSlot;
         if (k === this.slot) {

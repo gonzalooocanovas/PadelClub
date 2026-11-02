@@ -10,6 +10,7 @@ import { DEFAULT_LOOKS } from '/shared/looks.js';
 import { buildCharacter, disposeCharacter, blobShadow } from './characters.js';
 import { loadStatues, statueReady, statueKind, buildStatue, statueFollow } from './statue.js';
 import { restPose, captureRest } from './skin.js';
+import { predictBall } from '/shared/physics.js';
 import { newAnim, stepAnim, animLabel } from './anim-state.js';
 import { settings, onSetting } from './settings.js';
 import { buildEnvironment } from './envs.js';
@@ -370,6 +371,15 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
     this.ballDrop = new THREE.Line(lg, new THREE.LineBasicMaterial({ color: 0xf3ff7a, transparent: true, opacity: 0.0, depthWrite: false }));
     this.ballDrop.frustumCulled = false;
     this.scene.add(this.ballDrop);
+    // landing marker: where the ball will first touch the floor (a ring and a dot, green when in, red when out)
+    const lm = new THREE.Group(); lm.visible = false; lm.renderOrder = 20;
+    const lmat = (o) => new THREE.MeshBasicMaterial({ color: 0xb6ff3c, transparent: true, opacity: o, depthWrite: false, depthTest: false });
+    this.landRing = new THREE.Mesh(new THREE.RingGeometry(0.26, 0.34, 36), lmat(0.9));
+    this.landDot = new THREE.Mesh(new THREE.CircleGeometry(0.07, 16), lmat(0.95));
+    this.landOuter = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.54, 36), lmat(0.45));
+    for (const m of [this.landRing, this.landDot, this.landOuter]) { m.rotation.x = -Math.PI / 2; m.renderOrder = 20; lm.add(m); }
+    this.landMarker = lm; this.landFrame = 0; this.landLock = false; this.landPrev = null;
+    this.scene.add(lm);
     this.ballHalo = new THREE.Mesh(
       new THREE.RingGeometry(0.1, 0.12, 24),
       new THREE.MeshBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.0, depthWrite: false, depthTest: false }),
@@ -703,6 +713,36 @@ if (swinging) {
     const pos = this.ballDrop.geometry.attributes.position;
     pos.setXYZ(0, x, y, z); pos.setXYZ(1, x, 0.02, z); pos.needsUpdate = true;
     this.ballDrop.material.opacity = y > 1.3 ? Math.min(0.28, (y - 1.3) * 0.1) : 0;
+  }
+
+  /**
+   * Show where the ball will first touch the floor. Read-only: it predicts with the shared physics from the ball's drawn state, so it
+   * is the same on every client and never changes the game. Hidden while the ball is in the server's hand, after it has bounced (until
+   * the next hit) and when the setting is off.
+   */
+  updateLanding(ball, on = true, singles = false) {
+    const m = this.landMarker;
+    if (!m) return;
+    if (!on || !ball || ball.vx === undefined) { m.visible = false; return; }
+    const sp = Math.hypot(ball.vx, ball.vy, ball.vz), prev = this.landPrev;
+    // a hit: the speed jumps or the ball turns round; a bounce: it is on the floor and going up
+    if (prev && (Math.abs(sp - prev.sp) > 4 || prev.vz * ball.vz < -1)) this.landLock = false;
+    if (ball.y < 0.14 && ball.vy > 0.5) this.landLock = true;
+    this.landPrev = { sp, vz: ball.vz };
+    if (this.landLock || sp < 2 || (ball.y < 1.3 && sp < 4)) { m.visible = false; return; }
+    if ((this.landFrame++ % 3) === 0) {
+      const sam = predictBall({ ...ball, hw: singles ? 3.5 : 5, fe: 0.85, ff: 0.86 }, 3.2);
+      const f = sam.find((x) => x.floor);
+      this.landTo = f ? { x: f.x, z: f.z, t: f.t } : null;
+    }
+    const L = this.landTo;
+    if (!L) { m.visible = false; return; }
+    const inside = Math.abs(L.x) <= (singles ? 3.5 : 5) + 0.02 && Math.abs(L.z) <= 10.02;
+    const col = inside ? 0xb6ff3c : 0xff5a4a;
+    for (const o of [this.landRing, this.landDot, this.landOuter]) o.material.color.setHex(col);
+    m.visible = true; m.position.set(L.x, 0.035, L.z);
+    const k = 1 + 0.12 * Math.sin(this.clock * 8);
+    this.landRing.scale.setScalar(k); this.landOuter.scale.setScalar(1 + Math.max(0, L.t - 0.05) * 0.5);
   }
 
   /**

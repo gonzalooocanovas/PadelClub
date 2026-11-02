@@ -21,6 +21,7 @@ const DEFAULTS = {
   hints: true,
   highContrast: false,
   invertAim: false,
+  landingMarker: true, // a ring on the floor where the ball will land
   scannedModels: true, // use the owner's 3D character (client/models/source) for the agile archetype; off = the procedural athletes
 };
 
