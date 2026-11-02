@@ -303,22 +303,22 @@ export class PadelGame {
       case 'serve': speed = (9.5 + 5 * q) * (this._servePace || 1); depth = clamp(Math.abs(aimZ), 2.5, 9); sb = 4; break; // (a charged serve may overshoot the box, see doServe)
       case 'forehand': sb = -9; depth = clamp(depth, 3, 9.2); break; // topspin drive
       case 'backhand': sb = -6; depth = clamp(depth, 3, 9.2); break;
-      case 'slice': speed = 13.5; sb = 17; depth = clamp(depth, 3, 9.2); break; // skidding backspin
-      case 'volley': speed = 16.5; depth = clamp(depth, 3, 9); sb = 5; break;
+      case 'slice': speed = 16; sb = 17; depth = clamp(depth, 3, 9.2); break; // skidding backspin
+      case 'volley': speed = 19; depth = clamp(depth, 3, 9); sb = 5; break;
       case 'smash': speed = 30; depth = clamp(depth, 2.5, 8.5); sb = -4;
         // "por 4": a clean smash aimed short and hit from the net comes down steeply with topspin, bounces very high and leaves the
         // court over the fence: a winner (needs a clean contact: a poor one just goes into the net or the glass)
         if (q >= 0.8 && depth <= 4.8 && Math.abs(b.z) < 5.5 && b.y >= 2.2) { speed = 36; sb = -12; kill = true; }
         break;
-      case 'bandeja': speed = 13.5; depth = clamp(Math.max(depth, 6.5), 6.5, 9); sb = 15; break; // slow, backspin, stays low off the glass
+      case 'bandeja': speed = 15.5; depth = clamp(Math.max(depth, 6.5), 6.5, 9); sb = 15; break; // slow, backspin, stays low off the glass
       case 'vibora': // fast, sidespin: kicks sideways off the glass
-        speed = 19; depth = clamp(depth, 5, 9); tx = clamp(tx * 1.2, -lim - 0.1, lim + 0.1); sb = 7;
+        speed = 22; depth = clamp(depth, 5, 9); tx = clamp(tx * 1.2, -lim - 0.1, lim + 0.1); sb = 7;
         ss = (Math.sign((tx - b.x) * os) || 1) * 17;
         break;
       case 'lob': depth = clamp(Math.max(depth, 7.2), 7, 9.3); sb = -6; break; // globo
-      case 'chiquita': speed = 8; depth = clamp(depth, 2.2, 4); sb = 9; break;
-      case 'drop': speed = 6.5; depth = clamp(depth, 1.1, 2.4); sb = 21; break;
-      case 'block': speed = 9.5; depth = clamp(depth, 4, 8); sb = 3; break;
+      case 'chiquita': speed = 10.5; depth = clamp(depth, 2.2, 4); sb = 9; break;
+      case 'drop': speed = 7.5; depth = clamp(depth, 1.1, 2.4); sb = 21; break;
+      case 'block': speed = 12.5; depth = clamp(depth, 4, 8); sb = 3; break;
       default: depth = clamp(depth, 3, 9.2);
     }
     if (kind !== 'serve') speed *= 0.8 + 0.2 * q; // a poorly struck ball carries less pace

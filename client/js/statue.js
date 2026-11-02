@@ -10,6 +10,7 @@ import { clone as cloneSkinned } from '/vendor/three/examples/jsm/utils/Skeleton
 import { adoptBones, skinFollow, REQUIRED_BONES } from './skin.js';
 import { buildRacket } from './characters.js';
 import { RACKETS, ARCHETYPES } from '/shared/looks.js';
+import { variantTexture, variantFor } from './variants.js';
 
 export const MODEL_URL = '/models/source/output_mesh_pbr_rigged_game.glb'; // 16k triangles, 1024 px WebP textures, 0.9 MB: the lightweight copy of the fixed rig (the full one stays beside it)
 const HEIGHT = 1.82; // metres: the model is 1.90 m tall; one uniform scale, set once and never changed
@@ -65,6 +66,9 @@ export function buildStatue(look, team, shadowBlob) {
   const scene = cloneSkinned(source); // own skeleton per player, shared geometry and materials
   let mesh = null; scene.traverse((o) => { if (o.isSkinnedMesh) mesh = o; });
   mesh.castShadow = true; mesh.frustumCulled = false; mesh.name = 'player_mesh';
+  // each player gets its own kit, skin tone and hair colour: a re-coloured copy of the base texture (cached); the shared material is cloned
+  const vt = variantTexture(mesh.material.map, variantFor(look, team));
+  if (vt) { mesh.material = mesh.material.clone(); mesh.material.map = vt; mesh.material.needsUpdate = true; }
   const { bones, list } = adoptBones(scene);
   mesh.geometry.computeBoundingBox();
   const box = mesh.geometry.boundingBox;

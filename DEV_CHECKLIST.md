@@ -183,3 +183,10 @@ Classes: IMPLEMENTED / AUTO-TESTED / MANUALLY VERIFIED (a person, or me in the r
 
 ## Environments: Night Arena and Mediterranean Club (latest) - see docs/ENVIRONMENTS.md
 - Rebuilt (ids night and outdoor unchanged): client/js/env-kit.js (textures, instanced seating, spectators, plants, floodlights, disposal), client/js/envs-pro.js (the two environments), envs.js (falls back to the old builders if the new ones throw), scene.js (reflection map per environment, frame colour per environment, glass clamps, turf detail, cheering for the new crowd). Seen in the running game from seven camera settings; measured on one machine (about 4.5 ms per frame, 440-490 draw calls); 7 new unit tests; a resource leak on environment switches was found and fixed. NOT done: low-end GPU / mobile measurements, 1v1 court views, judged shadow quality, the indoor and rooftop environments.
+
+## Round of 2 Nov: celebration, ball in the floor, shot pace, player variants, knees
+- Celebration: the skinned character celebrates with arms out in a V (a separate pose) and shoulder/elbow angles are limited (2.3 / 2.4 rad) so the skin no longer balloons or stretches; strokes with the arm overhead are limited the same way.
+- Ball half in the floor after a point: the ball is drawn up to 3x bigger around its true centre, so on the floor it sank by (scale-1) x radius; the picture is now lifted by that amount near the floor (physics untouched).
+- Shots other than the Space drive were soft: slice 13.5->16 m/s, volley 16.5->19, bandeja 13.5->15.5, viborа 19->22, chiquita 8->10.5, drop 6.5->7.5, block 9.5->12.5 (lob unchanged). Checked on the shot planner (speed and apex per kind); not played by a person.
+- Variants: client/js/variants.js re-colours the base texture per player (8 kits by archetype and team, skin tone and hair colour from the look); cached. The FACE SHAPE is the same for everybody: different faces need more models.
+- Knees: stride knee fold increased (2.6x) so the knee bends visibly when running; seen in stills.

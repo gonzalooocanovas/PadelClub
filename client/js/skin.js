@@ -129,6 +129,8 @@ export function adoptBones(scene) {
 const q = new THREE.Quaternion(), r = new THREE.Quaternion();
 const delta = (cur, rest) => q.setFromEuler(cur.rotation).multiply(r.copy(rest).invert()).clone();
 const part = (d, f) => new THREE.Quaternion().slerp(d, f); // a fraction of a rotation
+/** Limit a rotation to at most `max` radians (a safety net: no joint is ever bent or twisted past what a body can do). */
+const limit = (d, max) => { const a = 2 * Math.acos(Math.min(1, Math.abs(d.w))); return a > max ? part(d, max / a) : d; };
 
 const JOINT_OF = { spine: (pl) => pl.spine, head: (pl) => pl.head, shR: (pl) => pl.armR.sh, elR: (pl) => pl.armR.elbow, shL: (pl) => pl.armL.sh, elL: (pl) => pl.armL.elbow, thR: (pl) => pl.legR.thigh, knR: (pl) => pl.legR.knee, ftR: (pl) => pl.legR.foot, thL: (pl) => pl.legL.thigh, knL: (pl) => pl.legL.knee, ftL: (pl) => pl.legL.foot };
 const qa = new THREE.Quaternion(), qb = new THREE.Quaternion();
@@ -153,10 +155,10 @@ export function skinFollow(pl) {
   const dHead = delta(pl.head, REST.head); put(B.neck, part(dHead, 0.4)); put(B.head, part(dHead, 0.6));
   for (const S of ['R', 'L']) {
     const arm = S === 'R' ? pl.armR : pl.armL, leg = S === 'R' ? pl.legR : pl.legL;
-    const dSh = part(delta(arm.sh, REST['sh' + S]), damp[S]), dCl = part(dSh, 0.4);
+    const dSh = limit(part(delta(arm.sh, REST['sh' + S]), damp[S]), 2.3), dCl = part(dSh, 0.4);
     put(B['cl' + S], dCl);
     put(B['sh' + S], dCl.clone().invert().multiply(dSh));
-    put(B['el' + S], part(delta(arm.elbow, REST['el' + S]), damp[S]));
+    put(B['el' + S], limit(part(delta(arm.elbow, REST['el' + S]), damp[S]), 2.4));
     put(B['th' + S], delta(leg.thigh, REST['th' + S])); put(B['kn' + S], delta(leg.knee, REST['kn' + S])); put(B['ft' + S], delta(leg.foot, REST['ft' + S]));
   }
   B.haL.quaternion.copy(B.haL.userData.base);

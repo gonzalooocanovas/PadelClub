@@ -82,6 +82,8 @@ const READY = [0, 0, 0.12, 0.32, -0.45, -0.7, 1.7, 0.35, -0.5, 0.9, 0];
 // serving: ball bounced in the left hand, racket low and back
 // after a point: the winners celebrate, the losers hang their head
 const EMOTE_WIN = [0.1, 0.15, -0.05, 0.25, -0.6, -2.9, 0.4, 0.4, -2.7, 0.5, 0];
+// the skinned character celebrates with arms out in a V (about 100 degrees), not straight up: past that the shoulder skin balloons
+const EMOTE_WIN_S = [0.1, 0.15, -0.05, 0.25, -0.55, -1.1, 0.7, 0.55, -1.1, 0.7, 0];
 const EMOTE_LOSE = [0, 0, 0.3, 0.15, -0.2, -0.25, 0.5, 0.12, -0.1, 0.3, 0];
 const SERVE_READY = [0.05, -0.2, 0.15, 0.45, -0.3, 0.15, 0.5, 0.15, -0.2, 0.5, -0.1];
 // each shot: [load, contact, follow]
@@ -568,7 +570,7 @@ if (swinging) {
       if (e.t > 2.4) pl.emote = null;
       else {
         const fade = Math.min(1, e.t / 0.25, (2.4 - e.t) / 0.5);
-        const tgt = e.type === 'win' ? EMOTE_WIN : EMOTE_LOSE;
+        const tgt = e.type === 'win' ? (pl.statue ? EMOTE_WIN_S : EMOTE_WIN) : EMOTE_LOSE;
         for (let n = 0; n < target.length; n++) target[n] += (tgt[n] - target[n]) * fade;
         if (e.type === 'win') emoteHop = Math.abs(Math.sin(e.t * 8)) * 0.1 * fade;
         else emoteHead = { x: 0.4 * fade, y: Math.sin(e.t * 3) * 0.3 * fade };
@@ -629,8 +631,8 @@ if (swinging) {
     // legs: base crouch + stride + shuffle + batting step
     const legPose = (L, sgn) => {
       const phL = ph + (sgn > 0 ? 0 : Math.PI);
-      const stride = Math.sin(phL) * pitchAmp * dirF * calm;
-      const lift = Math.max(0, Math.cos(phL * dirF)) * pitchAmp * 1.4 * calm;
+      const stride = Math.sin(phL) * pitchAmp * 1.3 * dirF * calm;
+      const lift = Math.max(0, Math.cos(phL * dirF)) * pitchAmp * 2.6 * calm; // the knee folds the leg up on the swing phase
       const step = P[10] * (sgn > 0 ? -0.55 : 0.55); // right leg (sgn<0) steps forward when step>0
       L.thigh.rotation.x = -a - stride - step * 0.8;
       L.knee.rotation.x = 2 * a + lift + Math.abs(step) * 0.35;
@@ -642,6 +644,10 @@ if (swinging) {
 
     // arms
     const counter = Math.sin(ph) * pitchAmp * 1.1 * calm;
+    if (pl.statue) { // a real skinned body cannot take the procedural rig's extreme arm angles (celebration, smash): keep the shoulders within about 125 degrees
+      P[5] = Math.max(P[5], -2.0); P[8] = Math.max(P[8] + counter, -2.0) - counter;
+      P[4] = THREE.MathUtils.clamp(P[4], -1.5, 1.5); P[7] = THREE.MathUtils.clamp(P[7], -1.5, 1.5);
+    }
     pl.armR.sh.rotation.set(P[5], P[4], 0);
     pl.armR.elbow.rotation.set(-(P[6] + Math.sin(ph + Math.PI) * 0.15 * run * calm), 0, 0);
     pl.armL.sh.rotation.set(P[8] + counter, P[7], 0.12);
@@ -682,13 +688,16 @@ if (swinging) {
     const bp = this.ball.position;
     if (this.ballSeen && Math.hypot(x - bp.x, y - bp.y, z - bp.z) > 1.5) { this.ballAppear = { t: 0 }; this.trailPos.length = 0; }
     this.ballSeen = true;
-    this.ball.position.set(x, y, z);
+    // The ball is drawn bigger than it is (Ball size setting) around its true centre, so on the floor it would sink into the turf by
+    // (scale - 1) x radius. Lift the picture by that amount near the floor and fade the lift out with height (physics is untouched).
+    const vy = y + (this.ballBase - 1) * 0.0335 * Math.max(0, 1 - Math.max(0, y - 0.0335) / 0.8);
+    this.ball.position.set(x, vy, z);
     // the shadow is sharper and darker near the floor, softer and larger when the ball is high
     const k = 1 + y * 0.18;
     this.ballShadow.position.set(x, 0.02, z);
     this.ballShadow.scale.setScalar(k * this.ballBase * 0.7);
     this.ballShadow.material.opacity = Math.max(0.12, 0.5 / (1 + 0.45 * y));
-    this.ballHalo.position.set(x, y, z);
+    this.ballHalo.position.set(x, vy, z);
     this.ballHalo.quaternion.copy(this.camera.quaternion);
     // plumb line
     const pos = this.ballDrop.geometry.attributes.position;
