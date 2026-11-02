@@ -15,7 +15,7 @@
   for (const pl of w.players) pl.root.parent?.remove(pl.root);
   const V = (slot, kind, t, extra = {}) => w.updatePlayer(slot, { x: 0, z: 0, vx: 0, vz: 0, swingT: t, kindName: kind, jumpT: 0, ...extra }, 0.016, false);
   // render the current state of a rig again (after editing bones by hand): window.__shot(slot, angle, fov)
-  window.__shot = (slot, a = 0.5, fov = 22) => { const pl = w.players[slot], cam = new w.camera.constructor(fov, 800 / 600, 0.1, 50), s = pl.team ? -1 : 1; r2.setViewport(0, 0, 800, 600); r2.setScissor(0, 0, 800, 600); pl.root.updateMatrixWorld(true); cam.position.set(Math.sin(a) * 5.2 * s, 1.1, Math.cos(a) * 5.2 * s); cam.lookAt(0, 0.9, 0); r2.render(sc, cam); };
+  window.__shot = (slot, a = 0.5, fov = 22, ly = 0.9) => { const pl = w.players[slot], cam = new w.camera.constructor(fov, 800 / 600, 0.1, 50), s = pl.team ? -1 : 1; r2.setViewport(0, 0, 800, 600); r2.setScissor(0, 0, 800, 600); pl.root.updateMatrixWorld(true); cam.position.set(Math.sin(a) * 5.2 * s, ly + 0.2, Math.cos(a) * 5.2 * s); cam.lookAt(0, ly, 0); r2.render(sc, cam); };
   window.strip = (slot, kind, times, a = 0.9, fov = 22, run = 0) => {
     const pl = w.players[slot];
     for (const q of w.players) sc.remove(q.root);

@@ -90,9 +90,10 @@ export class PadelGame {
       for (const s of [1, 3]) place(s, 40, 0); // parked off-court, inactive
     } else {
       place(serverSlot ^ 1, -sx, -os * 2.3);
-      place(recvSlot ^ 1, sx, os * 2.3);
+      place(recvSlot ^ 1, sx, os * 7.6); // the receiver's partner waits at the back too (only the server's partner is at the net)
     }
     this.serverSlot = serverSlot;
+    this.recvSlot = recvSlot; // the only player of the receiving team who may play the serve
     this.startPos = this.players.map((p) => [p.x, p.z]); // where everybody stands for this point (restored after a fault)
     this.rally = {
       serving: true, faults: 0, lastTeam: srv.team, lastSlot: serverSlot,
@@ -276,6 +277,8 @@ export class PadelGame {
 
   startSwing(p, sw) {
     if (this.phase === 'serve' && p.slot !== this.serverSlot) return;
+    // the serve is returned by the receiver only: his partner (and the server's own team) may not touch it
+    if (this.rally?.hits === 1 && this.phase === 'rally' && p.team !== this.rally.lastTeam && p.slot !== this.recvSlot) return; // hits === 1: only the serve has been hit so far
     p.swing = { t: 0, done: false, ax: sw.ax, az: sw.az, mod: sw.mod, lob: sw.lob, pace: sw.pace || 0.9, slip: !!sw.slip, tac: sw.tac || '' };
     p.kind = SHOT_IDS.indexOf(this.phase === 'serve' ? 'serve' : this.classify(p, sw));
   }

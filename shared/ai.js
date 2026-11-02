@@ -149,7 +149,9 @@ export function botInput(game, slot, mem, difficulty = 'normal', dt = 1 / 60) {
     const tp = teamPlan(game, p.team, skill);
     const plan = tp.plan;
     mem.plan = plan;
-    const responsible = tp.owner === slot || (tp.owner === -1 && !game.players[slot ^ 1].active);
+    // the serve is the receiver's ball alone: his partner never goes for it (and the game would not let him hit it)
+    const notMyServe = r.hits === 1 && !game.singles && game.recvSlot !== undefined && slot !== game.recvSlot;
+    const responsible = !notMyServe && (tp.owner === slot || (tp.owner === -1 && !game.players[slot ^ 1].active) || (r.hits === 1 && slot === game.recvSlot));
     if (plan && responsible) {
       if (mem.react <= 0) moveTo(inp, p, plan.x, plan.z - os * (plan.y > 1.8 ? 0.3 : 0.75), skill, true);
     } else {

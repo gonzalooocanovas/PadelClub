@@ -85,6 +85,8 @@ const READY = [0, 0, 0.12, 0.32, -0.45, -0.7, 1.7, 0.35, -0.5, 0.9, 0];
 const EMOTE_WIN = [0.1, 0.15, -0.05, 0.25, -0.6, -2.9, 0.4, 0.4, -2.7, 0.5, 0];
 // the skinned character celebrates with arms out in a V (about 100 degrees), not straight up: past that the shoulder skin balloons
 const EMOTE_WIN_S = [0.1, 0.15, -0.05, 0.25, -0.55, -1.1, 0.7, 0.55, -1.1, 0.7, 0];
+// losing, for the skinned character: a small head-down with a quicker side-to-side shake ("no, no"), no deep bow (the chin would sink into the chest)
+const EMOTE_LOSE_S = [0, 0, 0.12, 0.15, -0.2, -0.25, 0.5, 0.12, -0.1, 0.3, 0];
 const EMOTE_LOSE = [0, 0, 0.3, 0.15, -0.2, -0.25, 0.5, 0.12, -0.1, 0.3, 0];
 const SERVE_READY = [0.05, -0.2, 0.15, 0.45, -0.3, 0.15, 0.5, 0.15, -0.2, 0.5, -0.1];
 // each shot: [load, contact, follow]
@@ -511,13 +513,21 @@ turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
     pl.wasSwinging = swinging;
     const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));
 
-    // Body yaw: square to the net, turning toward the ball when it is on our side. Frozen while swinging.
+    // Body yaw: square to the net by default, but free to turn: toward the ball when it is on our side (all the way round when it
+    // goes behind us), and toward the direction of travel when running hard backwards (a player chasing a lob turns and runs).
+    // Frozen while swinging.
     const bp = this.ball.position;
     const ballAng = wrap(Math.atan2(bp.x - v.x, bp.z - v.z) - base);
     const ownSide = pl.team === 0 ? bp.z < 0.5 : bp.z > -0.5;
     if (!swinging) {
-      const want = base + THREE.MathUtils.clamp(ballAng, -1.05, 1.05) * (ownSide ? 0.6 : 0.2);
-      pl.yaw += wrap(want - pl.yaw) * Math.min(1, dt * 8);
+      let want = base + THREE.MathUtils.clamp(ballAng, -2.6, 2.6) * (ownSide ? 0.85 : 0.2);
+      const spd = Math.hypot(v.vx, v.vz);
+      if (spd > 3.2) {
+        const moveAng = wrap(Math.atan2(v.vx, v.vz) - base);
+        if (Math.abs(moveAng) > 1.9) want = base + moveAng * 0.8; // running back: turn and run
+        else if (Math.abs(moveAng) > 0.9) want += wrap(base + moveAng - want) * 0.35; // running sideways: open the body toward it a little
+      }
+      pl.yaw += wrap(want - pl.yaw) * Math.min(1, dt * 9);
     }
     pl.root.rotation.y = pl.yaw;
 
@@ -580,10 +590,10 @@ if (swinging) {
       if (e.t > 2.4) pl.emote = null;
       else {
         const fade = Math.min(1, e.t / 0.25, (2.4 - e.t) / 0.5);
-        const tgt = e.type === 'win' ? (pl.statue ? EMOTE_WIN_S : EMOTE_WIN) : EMOTE_LOSE;
+        const tgt = e.type === 'win' ? (pl.statue ? EMOTE_WIN_S : EMOTE_WIN) : (pl.statue ? EMOTE_LOSE_S : EMOTE_LOSE);
         for (let n = 0; n < target.length; n++) target[n] += (tgt[n] - target[n]) * fade;
         if (e.type === 'win') emoteHop = Math.abs(Math.sin(e.t * 8)) * 0.1 * fade;
-        else emoteHead = { x: 0.4 * fade, y: Math.sin(e.t * 3) * 0.3 * fade };
+        else emoteHead = pl.statue ? { x: 0.1 * fade, y: Math.sin(e.t * 6.5) * 0.42 * fade } : { x: 0.4 * fade, y: Math.sin(e.t * 3) * 0.3 * fade };
       }
     }
     const k = swinging ? 1 : 1 - Math.exp(-dt * 13);
@@ -671,6 +681,7 @@ if (swinging) {
     pl.head.rotation.y += (THREE.MathUtils.clamp(look, -1.0, 1.0) * 0.85 - pl.head.rotation.y) * Math.min(1, dt * 12);
     pl.head.rotation.x = 0.08 - (pl.spine.rotation.x) * 0.6 + Math.min(0.2, Math.max(-0.2, (bp.y - 1.5) * -0.04)); // gaze stays level when the body leans
     if (emoteHead) { pl.head.rotation.x += emoteHead.x; pl.head.rotation.y += emoteHead.y; }
+    if (pl.statue) { pl.head.rotation.x = THREE.MathUtils.clamp(pl.head.rotation.x, -0.3, 0.32); pl.head.rotation.y = THREE.MathUtils.clamp(pl.head.rotation.y, -0.95, 0.95); } // the neck of the real body turns and nods only so far
 
     const lift = v.jumpT > 0 ? Math.sin(Math.PI * (1 - v.jumpT / 0.62)) * 0.7 : 0;
     pl.root.position.set(v.x, lift, v.z);
