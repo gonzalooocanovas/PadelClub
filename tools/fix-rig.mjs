@@ -79,12 +79,12 @@ for (let i = 0; i < n; i++) {
     if (limb(names[j]) && s !== 0 && Math.abs(x) > 0.03 && Math.sign(x) !== s) d += 4; // never assign a left vertex to a right limb or vice versa
     sc[j] = d; if (d < min) min = d;
   }
-  let sum = 0; for (let j = 0; j < B; j++) { const e = Math.exp(-3.2 * (sc[j] - min)); W[i * B + j] = e; sum += e; }
+  let sum = 0; for (let j = 0; j < B; j++) { const e = Math.exp(-5 * (sc[j] - min)); W[i * B + j] = e; sum += e; }
   for (let j = 0; j < B; j++) W[i * B + j] /= sum;
 }
 const adj = Array.from({ length: n }, () => new Set());
 for (let t = 0; t < tri.length; t += 3) { const a = canon[tri[t]], b = canon[tri[t + 1]], c = canon[tri[t + 2]]; adj[a].add(b).add(c); adj[b].add(a).add(c); adj[c].add(a).add(b); }
-for (let it = 0; it < 6; it++) {
+for (let it = 0; it < 3; it++) {
   const N = new Float32Array(n * B);
   for (let i = 0; i < n; i++) { if (canon[i] !== i) continue; const nb = adj[i]; for (let j = 0; j < B; j++) { if (!nb.size) { N[i * B + j] = W[i * B + j]; continue; } let m = 0; for (const o of nb) m += W[o * B + j]; N[i * B + j] = 0.5 * W[i * B + j] + 0.5 * (m / nb.size); } }
   W = N;

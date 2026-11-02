@@ -130,6 +130,14 @@ const q = new THREE.Quaternion(), r = new THREE.Quaternion();
 const delta = (cur, rest) => q.setFromEuler(cur.rotation).multiply(r.copy(rest).invert()).clone();
 const part = (d, f) => new THREE.Quaternion().slerp(d, f); // a fraction of a rotation
 /** Limit a rotation to at most `max` radians (a safety net: no joint is ever bent or twisted past what a body can do). */
+/**
+ * Swing-twist split: the rotation d about the arm's own axis (the twist) is what flattens an arm into a ribbon ("candy wrapper")
+ * when a whole shoulder rotation is applied to one bone. Keep only `keep` of the twist on the upper arm (the swing is kept in
+ * full) and return the part taken away so the forearm can share it.
+ */
+const twistOf = (d, axis) => { const p = d.x * axis.x + d.y * axis.y + d.z * axis.z; const t = new THREE.Quaternion(axis.x * p, axis.y * p, axis.z * p, d.w); const l = t.length(); return l > 1e-6 ? t.normalize() : new THREE.Quaternion(); };
+const splitTwist = (d, axis, keep) => { const tw = twistOf(d, axis), swing = d.clone().multiply(tw.clone().invert()), kept = part(tw, keep), removed = part(tw, 1 - keep); return { rot: swing.multiply(kept), removed }; };
+const ARM_AXIS = { R: new THREE.Vector3(-Math.sin(0.12), -Math.cos(0.12), 0), L: new THREE.Vector3(Math.sin(0.12), -Math.cos(0.12), 0) };
 const limit = (d, max) => { const a = 2 * Math.acos(Math.min(1, Math.abs(d.w))); return a > max ? part(d, max / a) : d; };
 
 const JOINT_OF = { spine: (pl) => pl.spine, head: (pl) => pl.head, shR: (pl) => pl.armR.sh, elR: (pl) => pl.armR.elbow, shL: (pl) => pl.armL.sh, elL: (pl) => pl.armL.elbow, thR: (pl) => pl.legR.thigh, knR: (pl) => pl.legR.knee, ftR: (pl) => pl.legR.foot, thL: (pl) => pl.legL.thigh, knL: (pl) => pl.legL.knee, ftL: (pl) => pl.legL.foot };
@@ -150,22 +158,37 @@ export function captureRest(pl) { pl.skin.restRacket = rootRel(pl, pl.racket, ne
  */
 export function skinFollow(pl) {
   const B = pl.skin.bones, k = pl.skin.unit, damp = pl.skin.keepArms ? { R: 0.85, L: 0.45 } : { R: 1, L: 1 };
-  const put = (bone, d) => { bone.quaternion.copy(d).multiply(bone.userData.base); };
+  // Every bone follows its target through a rate limit: a joint can turn at most MAXSTEP radians per frame, so a flipped racket
+  // orientation, an Euler wrap or a pose change can never snap a limb (the cause of arms that suddenly stretch) - it turns smoothly.
+  const prev = pl.skin.prev || (pl.skin.prev = new Map());
+  const MAXSTEP = { Shoulder: 0.22, Arm: 0.3, ForeArm: 0.34, Hand: 0.3, Spine: 0.25, Spine1: 0.25, Chest: 0.25, Neck: 0.3, Head: 0.35, UpLeg: 0.4, Leg: 0.45, Foot: 0.45 };
+  const putRaw = (bone, target) => {
+    const cur = prev.get(bone.name);
+    if (!cur) { prev.set(bone.name, target.clone()); bone.quaternion.copy(target); return; }
+    cur.rotateTowards(target, MAXSTEP[bone.name.replace(/^(Left|Right)/, '')] ?? 0.35); bone.quaternion.copy(cur);
+  };
+  const put = (bone, d) => putRaw(bone, d.clone().multiply(bone.userData.base));
   const dSpine = delta(pl.spine, REST.spine); put(B.spine, part(dSpine, 0.4)); put(B.chest, part(dSpine, 0.6));
   const dHead = delta(pl.head, REST.head); put(B.neck, part(dHead, 0.4)); put(B.head, part(dHead, 0.6));
   for (const S of ['R', 'L']) {
     const arm = S === 'R' ? pl.armR : pl.armL, leg = S === 'R' ? pl.legR : pl.legL;
-    const dSh = limit(part(delta(arm.sh, REST['sh' + S]), damp[S]), 2.3), dCl = part(dSh, 0.4);
+    const split = splitTwist(limit(part(delta(arm.sh, REST['sh' + S]), damp[S]), 2.3), ARM_AXIS[S], 0.35), dSh = split.rot, dCl = part(dSh, 0.4);
     put(B['cl' + S], dCl);
     put(B['sh' + S], dCl.clone().invert().multiply(dSh));
-    put(B['el' + S], limit(part(delta(arm.elbow, REST['el' + S]), damp[S]), 2.4));
+    put(B['el' + S], limit(part(delta(arm.elbow, REST['el' + S]), damp[S]), 2.4).clone().premultiply(part(split.removed, 0.5))); // the forearm takes half of the twist the upper arm gave up
     put(B['th' + S], delta(leg.thigh, REST['th' + S])); put(B['kn' + S], delta(leg.knee, REST['kn' + S])); put(B['ft' + S], delta(leg.foot, REST['ft' + S]));
   }
   B.haL.quaternion.copy(B.haL.userData.base);
   // the racket keeps its face square to the net whatever the arm does (orientRacket), so the wrist bone cancels the forearm
   pl.root.updateMatrixWorld(true);
   const want = rootRel(pl, pl.racket, new THREE.Quaternion()).multiply(pl.skin.restRacket.clone().invert());
-  B.rk.quaternion.copy(rootRel(pl, B.elR, new THREE.Quaternion()).invert().multiply(want).multiply(B.rk.userData.baseWorld));
+  const rkT = rootRel(pl, B.elR, new THREE.Quaternion()).invert().multiply(want).multiply(B.rk.userData.baseWorld);
+  const rkRel = B.rk.userData.base.clone().invert().multiply(rkT);   // the wrist's own rotation away from its neutral
+  // The wrist bone only takes a small part of that rotation (large hand rotations drag the forearm skin into a ribbon); the rest turns the
+  // racket itself on the hand, so its face still stays square to the net.
+  const handRel = limit(rkRel, 0.4);
+  putRaw(B.rk, B.rk.userData.base.clone().multiply(handRel));
+  if (pl.skin.racketMesh) pl.skin.racketMesh.quaternion.copy(handRel.clone().invert().multiply(rkRel));
   // pelvis: lower with the crouch, turn and lean with the hips
   const o = B.pelvis.userData.offset, bd = B.pelvis.userData.bind;
   B.pelvis.quaternion.setFromEuler(pl.hips.rotation);

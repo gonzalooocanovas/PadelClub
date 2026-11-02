@@ -14,7 +14,7 @@ import { predictBall } from '/shared/physics.js';
 import { newAnim, stepAnim, animLabel } from './anim-state.js';
 import { settings, onSetting } from './settings.js';
 import { buildEnvironment } from './envs.js';
-import { disposeGroup, pavingTex } from './env-kit.js';
+import { disposeGroup, pavingTex, normalMapFromHeight } from './env-kit.js';
 import { netHeight } from '/shared/physics.js';
 
 const TEAM_COLORS = [0xf2f5f8, 0x3d78c4]; // team A white, team B blue
@@ -141,7 +141,7 @@ export class World {
     this.renderer.setPixelRatio(pr);
     this.renderer.shadowMap.enabled = q !== 'low';
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.sun.shadow.mapSize.set(q === 'high' ? 2048 : 1024, q === 'high' ? 2048 : 1024);
+    this.sun.shadow.mapSize.set(q === 'high' ? 4096 : 2048, q === 'high' ? 4096 : 2048); this.sun.shadow.radius = 2.5;
     if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; }
     this.sun.castShadow = q !== 'low';
     this.bloom = q === 'high';
@@ -191,8 +191,8 @@ export class World {
     // playing surface
     const turf = new THREE.Mesh(new THREE.PlaneGeometry(10, 20), new THREE.MeshStandardMaterial({ map: turfTexture(), roughness: 0.92 }));
 turf.rotation.x = -Math.PI / 2; turf.receiveShadow = true;
-    const bump = canvasTex(128, 128, (g, w, h) => { for (let i = 0; i < 2600; i++) { g.fillStyle = `rgba(${Math.random() * 255 | 0},${Math.random() * 255 | 0},${Math.random() * 255 | 0},.5)`; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); } }, { repeat: [10, 20] });
-    turf.material.bumpMap = bump; turf.material.bumpScale = 0.6;
+    turf.material.normalMap = normalMapFromHeight(256, 2.4); turf.material.normalMap.repeat.set(26, 52); turf.material.normalScale.set(0.55, 0.55); // artificial-turf fibres catch the light
+    turf.material.roughness = 0.93;
     s.add(turf);
     this.turfMesh = turf;
     const glassMat = new THREE.MeshPhysicalMaterial({ color: 0xaecde6, transparent: true, opacity: 0.13, roughness: 0.04, metalness: 0, envMapIntensity: 1.6, specularIntensity: 1, side: THREE.DoubleSide, depthWrite: false });
@@ -630,7 +630,7 @@ if (swinging) {
       const u = 1 - v.jumpT / 0.62;
       crouch = u < 0.18 ? 0.5 : u < 0.8 ? 0.08 : 0.45;
     }
-    const a = crouch;
+    const a = pl.statue ? crouch * 1.3 : crouch; // the real body bends its knees more (the pose maths was tuned for the jointed dummy)
     pl.hips.position.y = 0.88 * Math.cos(a) + 0.1 + hop + emoteHop + Math.cos(2 * ph) * 0.025 * run * calm; // gentle two-per-stride bob, no hopping
     pl.hips.rotation.set(0, P[0] - Math.sin(ph) * 0.12 * run * calm * dirF, 0); // hips and shoulders counter-rotate when running
     pl.hips.rotation.x = Math.max(-0.3, Math.min(0.35, vf * 0.03)) * calm;

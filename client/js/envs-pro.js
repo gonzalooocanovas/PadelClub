@@ -4,7 +4,7 @@
 // collidable and nothing is placed inside the court or on the camera lines behind the baselines.
 import * as THREE from 'three';
 import {
-  rng, std, tex, plasterTex, limestoneTex, timberTex, concreteTex, pavingTex, gradientTex, glowTex, merge, paint,
+  skyEnvironment, rng, std, tex, plasterTex, limestoneTex, timberTex, concreteTex, pavingTex, gradientTex, glowTex, merge, paint,
   seatingBank, spectators, oliveGeometry, cypressGeometry, shrubGeometry, lavenderGeometry, grassGeometry, palmGeometry, instance,
   floodlightMast, lensMesh,
 } from './env-kit.js';
@@ -231,10 +231,6 @@ export function mediterraneanClub(ctx) {
     for (let z = -3.8; z <= 3.8; z += 0.5) group.add(box(wood, 3.0, 0.08, 0.14, sx * 10.4, 3.05, z, true));
     group.add(box(wood, 0.16, 0.22, 8.2, sx * 9.2, 3.0, 0)); group.add(box(wood, 0.16, 0.22, 8.2, sx * 11.6, 3.0, 0));
   }
-  // a few guests on the terrace (shared crowd system, small and calm)
-  const seats = []; for (const [x, z] of [[-8.1, -4.9], [-8.1, -4.1], [-8.1, 4.1], [8.1, 4.9], [8.1, -4.9]]) seats.push([x, 0.5, z, x < 0 ? Math.PI / 2 : -Math.PI / 2]);
-  spectators(ctx, group, seats, { occupancy: 1, rand: rng(3), palette: [0xf3ead9, 0x5b7fa8, 0xd8a45a, 0x8fae7a, 0xc66a5a] });
-
   // --- sky, a low sun with glow, layered hills receding into warm haze, and a strip of sea
   const sky = new THREE.Mesh(new THREE.SphereGeometry(180, 24, 12), new THREE.MeshBasicMaterial({ map: gradientTex([[0, '#4f8fd0'], [0.38, '#8fbbe3'], [0.6, '#cfe0ea'], [0.74, '#f4dfc0'], [0.85, '#f6d2a2'], [1, '#e9c39a']]), side: THREE.BackSide, fog: false, depthWrite: false }));
   sky.scale.y = 0.6; sky.renderOrder = -2; group.add(sky);
@@ -245,7 +241,10 @@ export function mediterraneanClub(ctx) {
     const rr = rng(seed), pos = [], idx = [], N = 60;
     for (let i = 0; i <= N; i++) { const a = a0 + (a1 - a0) * (i / N), hh = h0 + amp * (Math.sin(i * 0.35 + seed) * 0.5 + Math.sin(i * 0.9 + seed * 2) * 0.3 + rr() * 0.25); pos.push(Math.cos(a) * r, -2, Math.sin(a) * r, Math.cos(a) * r, hh, Math.sin(a) * r); if (i) { const k = (i - 1) * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); } }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
-    return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, fog: true }));
+    const base = new THREE.Color(color), top = base.clone().lerp(new THREE.Color(0xf3dcb8), 0.35), cols = [];
+    for (let i = 0; i < pos.length / 3; i++) { const c = i % 2 ? top : base; cols.push(c.r, c.g, c.b); }
+    g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+    return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, fog: true }));
   };
   group.add(ridge(1, 150, 14, 10, 0x9fb08c, -2.4, 0.4)); group.add(ridge(2, 125, 10, 8, 0x8ca077, -2.9, 0.9)); group.add(ridge(3, 100, 7, 5, 0x76895f, -3.1, 1.4));
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(400, 90), new THREE.MeshBasicMaterial({ map: gradientTex([[0, '#bfd6e2'], [1, '#5f9bc4']]), fog: true })); sea.rotation.x = -Math.PI / 2; sea.position.set(-60, -1.6, 70); group.add(sea);
@@ -253,7 +252,8 @@ export function mediterraneanClub(ctx) {
   // --- lighting: golden-hour sun from the side, soft sky and warm bounce
   const light = {
     bg: 0x9cc4e8, fog: [0xf2dcc0, 60, 210], hemi: [0xa9c8e8, 0xb58e66, 0.78], sun: { color: 0xffc78a, intensity: 3.1, pos: [sunDir.x * 30, sunDir.y * 30 + 2, sunDir.z * 30] },
-    exposure: 0.97, envIntensity: 0.34, frame: 0x2b2926, frameMetal: 0.55, frameRough: 0.48,
+    exposure: 0.97, envIntensity: 0.6, frame: 0x2b2926, frameMetal: 0.55, frameRough: 0.48,
+    envTexture: skyEnvironment(ctx.renderer, { stops: [[0, '#4f8fd0'], [0.38, '#8fbbe3'], [0.6, '#cfe0ea'], [0.74, '#f4dfc0'], [1, '#e9c39a']], ground: 0x9a8466, sunDir: [sunDir.x, sunDir.y, sunDir.z], sunColor: [14, 10, 6], sunSize: 5 }),
   };
   return { group, light, turf: { base: '#2c6aa8', out: { color: 0xffffff, rough: 0.9, paving: true } }, ads: { text: 'PADEL CLUB', bg: '#efe5d2', fg: '#9a4a2a', sub: 'COSTA DEL SOL' } };
 }

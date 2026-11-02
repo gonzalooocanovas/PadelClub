@@ -218,7 +218,7 @@ export function oliveGeometry(seed = 1) {
     const a = (i / limbs) * Math.PI * 2 + rand() * 0.8, out = 0.9 + rand() * 0.9, tip = new THREE.Vector3(fork.x + Math.cos(a) * out, 2.0 + rand() * 0.9, fork.z + Math.sin(a) * out);
     parts.push(branch(fork, tip, 0.17, 0.07, bark, 5));
     const mid = fork.clone().lerp(tip, 0.55);
-    for (let k = 0; k < 5; k++) { const c = tip.clone().add(new THREE.Vector3((rand() - 0.5) * 1.1, (rand() - 0.2) * 0.7, (rand() - 0.5) * 1.1)); const p = puff(0.42 + rand() * 0.34, leaves[Math.floor(rand() * leaves.length)], rand); p.translate(c.x, c.y, c.z); parts.push(p); }
+    for (let k = 0; k < 11; k++) { const c = tip.clone().add(new THREE.Vector3((rand() - 0.5) * 1.5, (rand() - 0.2) * 0.9, (rand() - 0.5) * 1.5)); const p = puff(0.26 + rand() * 0.22, leaves[Math.floor(rand() * leaves.length)], rand); p.translate(c.x, c.y, c.z); parts.push(p); }
     const p2 = puff(0.5 + rand() * 0.2, leaves[Math.floor(rand() * leaves.length)], rand); p2.translate(mid.x + Math.cos(a) * 0.2, mid.y + 0.4, mid.z + Math.sin(a) * 0.2); parts.push(p2);
   }
   return merge(parts);
@@ -339,4 +339,39 @@ export function disposeGroup(group) {
     for (const m of [].concat(o.material || [])) if (m && !seen.has(m)) { seen.add(m); for (const k of ['map', 'normalMap', 'roughnessMap', 'bumpMap', 'emissiveMap', 'alphaMap']) m[k]?.dispose?.(); m.dispose(); }
     if (o.isInstancedMesh) o.dispose();
   });
+}
+
+// ------------------------------------------------------------------ image-based lighting and surface detail
+
+/**
+ * A reflection/ambient map baked from a small stand-in of the venue: a sky dome with the given gradient, a bright sun and a ground
+ * colour. Used as scene.environment so skin, cloth, glass and metal are lit by the venue's own light (realistic shading), not by a
+ * generic studio. The returned texture frees its render target when it is disposed.
+ */
+export function skyEnvironment(renderer, { stops, ground = 0x555555, sunDir = [0.5, 0.5, 0.5], sunColor = [8, 7, 5], sunSize = 6, panels = null }) {
+  const sc = new THREE.Scene();
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(50, 24, 12), new THREE.MeshBasicMaterial({ map: gradientTex(stops), side: THREE.BackSide, fog: false }));
+  sc.add(dome);
+  const floor = new THREE.Mesh(new THREE.CircleGeometry(60, 16), new THREE.MeshBasicMaterial({ color: ground })); floor.rotation.x = -Math.PI / 2; floor.position.y = -2; sc.add(floor);
+  if (sunSize) { const sun = new THREE.Mesh(new THREE.CircleGeometry(sunSize, 16), new THREE.MeshBasicMaterial({ color: new THREE.Color(...sunColor), side: THREE.DoubleSide })); sun.position.set(...sunDir).normalize().multiplyScalar(40); sun.lookAt(0, 0, 0); sc.add(sun); }
+  for (const p of panels || []) { const m = new THREE.Mesh(new THREE.PlaneGeometry(p.w, p.h), new THREE.MeshBasicMaterial({ color: new THREE.Color(...p.color), side: THREE.DoubleSide })); m.position.set(...p.pos); m.lookAt(0, 0, 0); sc.add(m); }
+  const pm = new THREE.PMREMGenerator(renderer), target = pm.fromScene(sc, 0.02); pm.dispose();
+  sc.traverse((o) => { o.geometry?.dispose(); o.material?.map?.dispose(); o.material?.dispose(); });
+  target.texture.addEventListener('dispose', () => target.dispose());
+  return target.texture;
+}
+
+/** A tangent-space normal map from a greyscale height canvas (Sobel), for fine surface detail such as turf fibres. */
+export function normalMapFromHeight(size = 256, strength = 2.2, seed = 3) {
+  const r = rng(seed), h = new Float32Array(size * size);
+  for (let i = 0; i < size * size; i++) h[i] = r();
+  for (let pass = 0; pass < 2; pass++) for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) { const i = y * size + x; h[i] = (h[i] * 2 + h[y * size + (x + 1) % size] + h[((y + 1) % size) * size + x]) / 4; } // soften into fibre clumps
+  const c = document.createElement('canvas'); c.width = c.height = size; const g = c.getContext('2d'), img = g.createImageData(size, size);
+  const at = (x, y) => h[((y + size) % size) * size + ((x + size) % size)];
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const dx = (at(x + 1, y) - at(x - 1, y)) * strength * size / 64, dy = (at(x, y + 1) - at(x, y - 1)) * strength * size / 64, l = Math.hypot(dx, dy, 1), o = (y * size + x) * 4;
+    img.data[o] = (-dx / l * 0.5 + 0.5) * 255; img.data[o + 1] = (dy / l * 0.5 + 0.5) * 255; img.data[o + 2] = (1 / l * 0.5 + 0.5) * 255; img.data[o + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t;
 }

@@ -2,7 +2,7 @@
 // Same contract and rules as envs-pro.js: surroundings only, nothing inside the court footprint, merged or instanced repeated parts.
 import * as THREE from 'three';
 import {
-  rng, std, tex, plasterTex, limestoneTex, timberTex, concreteTex, gradientTex, glowTex, merge,
+  skyEnvironment, rng, std, tex, plasterTex, limestoneTex, timberTex, concreteTex, gradientTex, glowTex, merge,
   seatingBank, spectators, oliveGeometry, shrubGeometry, grassGeometry, instance,
 } from './env-kit.js';
 import { basic, mesh, box, skyline } from './envs-pro.js';
@@ -41,7 +41,6 @@ export function indoorClub(ctx) {
   group.add(box(glass, 0.05, 1.1, 38, 12.4, 3.0, 0));
   group.add(box(dark, 0.08, 0.08, 38, 12.4, 3.6, 0));
   const lounge = seatingBank(group, { origin: [15.8, 2.35, 18], along: [0, 0, -1], away: [1, 0, 0], rows: 1, length: 36, rise: 0.0001, run: 1.2, concrete: stone, dark, aisle: 5, seatColors: [0x9a4a2c, 0x2f6b66, 0xd9c7a0], rand });
-  spectators(ctx, group, lounge.seats.filter((_, i) => i % 2), { occupancy: 0.55, rand: rng(8), palette: [0xf3ead9, 0x2c3a52, 0x9a4a2c, 0xd9c7a0, 0x2f6b66] });
 
   // ceiling: dark slab, truss lines every 5 m and timber baffles (merged), long LED lines above the court
   group.add(box(std(0x15181d, 0.8), 36, 0.4, 48, 0, 11.8, 0));
@@ -69,7 +68,8 @@ export function indoorClub(ctx) {
   }
   return {
     group,
-    light: { bg: 0x10141b, fog: [0x1a1f28, 60, 150], hemi: [0xfff1de, 0x3a3f4a, 0.78], sun: { color: 0xfff4e6, intensity: 1.3, pos: [4, 20, 3] }, exposure: 1.05, envIntensity: 0.4, frame: 0x2b2f36, frameMetal: 0.6, frameRough: 0.4 },
+    light: { bg: 0x10141b, fog: [0x1a1f28, 60, 150], hemi: [0xfff1de, 0x3a3f4a, 0.78], sun: { color: 0xfff4e6, intensity: 1.3, pos: [4, 20, 3] }, exposure: 1.05, envIntensity: 0.65, frame: 0x2b2f36, frameMetal: 0.6, frameRough: 0.4,
+      envTexture: skyEnvironment(ctx.renderer, { stops: [[0, '#403a34'], [0.5, '#8a8278'], [1, '#d8d2c6']], ground: 0x9a9da3, sunSize: 0, panels: [-8, -4, 0, 4, 8].map((x) => ({ w: 1.2, h: 30, color: [7, 6.6, 6], pos: [x, 10, 0] })) }) },
     turf: { base: '#2a65a8', out: { color: 0xffffff, rough: 0.55, map: concreteTex('#a4a7ad', [14, 14]) } },
     ads: { text: 'PADEL CLUB', bg: '#1a1f26', fg: '#f1e6cf', sub: 'INDOOR · DOUBLES' },
   };
@@ -144,7 +144,8 @@ export function rooftopSunset(ctx) {
   }, { repeat: [12, 14] });
   return {
     group,
-    light: { bg: 0x6f4a86, fog: [0xe0907a, 70, 200], hemi: [0xffc3a0, 0x4a3a4e, 0.8], sun: { color: 0xffb27a, intensity: 2.4, pos: [sunDir.x * 30, sunDir.y * 30 + 4, sunDir.z * 30] }, exposure: 1.0, envIntensity: 0.32, frame: 0x30343c, frameMetal: 0.6, frameRough: 0.4 },
+    light: { bg: 0x6f4a86, fog: [0xe0907a, 70, 200], hemi: [0xffc3a0, 0x4a3a4e, 0.8], sun: { color: 0xffb27a, intensity: 2.4, pos: [sunDir.x * 30, sunDir.y * 30 + 4, sunDir.z * 30] }, exposure: 1.0, envIntensity: 0.6, frame: 0x30343c, frameMetal: 0.6, frameRough: 0.4,
+      envTexture: skyEnvironment(ctx.renderer, { stops: [[0, '#222b5e'], [0.4, '#6f4a86'], [0.58, '#d8607f'], [0.7, '#ff9a62'], [1, '#ffd9a0']], ground: 0x4a3f55, sunDir: [sunDir.x, sunDir.y, sunDir.z], sunColor: [12, 7, 4], sunSize: 6 }) },
     turf: { base: '#2a64ab', out: { color: 0xffffff, rough: 0.9, map: deck } },
     ads: { text: 'PADEL CLUB', bg: '#1d2540', fg: '#ffd08a', sub: 'SUNSET ROOFTOP' },
   };
